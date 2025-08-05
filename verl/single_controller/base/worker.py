@@ -138,7 +138,9 @@ class Worker(WorkerHelper):
         ###
         # [SUPPORT AMD: torch]
         if "AMD" in torch.cuda.get_device_name():
-            os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("ROCR_VISIBLE_DEVICES")
+            # os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("ROCR_VISIBLE_DEVICES")
+            os.environ["CUDA_VISIBLE_DEVICES"] = '0,1,4,5,6,7'
+            print('verl/single_controller/base/worker.py')
             os.environ["LOCAL_RANK"] = os.environ.get("RAY_LOCAL_RANK")
         ###
 

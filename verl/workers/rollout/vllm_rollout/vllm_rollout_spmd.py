@@ -129,10 +129,10 @@ class vLLMRollout(BaseRollout):
         limit_mm_per_prompt = None
         if config.get("limit_images", None):  # support for multi-image data
             limit_mm_per_prompt = {"image": config.get("limit_images")}
-
+        print('verl/workers/rollout/vllm_rollout/vllm_rollout_spmd.py')
         self.inference_engine = LLM(
             model=model_path,
-            enable_sleep_mode=True,
+            # enable_sleep_mode=True,
             tensor_parallel_size=tensor_parallel_size,
             distributed_executor_backend="external_launcher",
             dtype=config.dtype,

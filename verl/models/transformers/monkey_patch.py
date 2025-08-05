@@ -121,11 +121,11 @@ def apply_monkey_patch(model: PreTrainedModel, ulysses_sp_size: int):
     # TODO: VLM models only, unify monkey patch to LLM models.
     if model.config.model_type in ("qwen2_vl", "qwen2_5_vl"):  # patch remove padding for qwen2vl mrope
         from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLFlashAttention2
-        from transformers.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLFlashAttention2
+        # from transformers.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLFlashAttention2
 
         from verl.models.transformers.qwen2_vl import ulysses_flash_attn_forward
-
-        Qwen2VLFlashAttention2.forward = ulysses_flash_attn_forward
+        print('verl/models/transformers/monkey_patch.py')
+        # Qwen2VLFlashAttention2.forward = ulysses_flash_attn_forward
         Qwen2_5_VLFlashAttention2.forward = ulysses_flash_attn_forward
         print("Monkey patch FlashAttention2.forward in Qwen2VL")
         return

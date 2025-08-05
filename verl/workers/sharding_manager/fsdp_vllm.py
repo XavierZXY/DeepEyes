@@ -136,7 +136,8 @@ class FSDPVLLMShardingManager(BaseShardingManager):
         ):
             self.inference_engine.offload_model_weights()
         else:
-            self.inference_engine.sleep(level=1)
+            # self.inference_engine.sleep(level=1)
+            print('verl/workers/sharding_manager/fsdp_vllm.py')
 
         # self.module.to('cuda')
         # if torch.distributed.get_rank() == 0:

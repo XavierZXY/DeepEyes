@@ -19,7 +19,7 @@ import os
 
 import hydra
 import ray
-
+import json
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 
 
@@ -69,12 +69,30 @@ def run_ppo(config) -> None:
     os.environ["ENSURE_CUDA_VISIBLE_DEVICES"] = os.environ.get("CUDA_VISIBLE_DEVICES", "")
     if not ray.is_initialized():
         # this is for local ray cluster
+        # ray.init(
+        #     runtime_env={
+        #         "env_vars": {"TOKENIZERS_PARALLELISM": "true", "NCCL_DEBUG": "WARN", "VLLM_LOGGING_LEVEL": "WARN"}
+        #     },
+        #     num_cpus=config.ray_init.num_cpus,
+        # )
         ray.init(
-            runtime_env={
-                "env_vars": {"TOKENIZERS_PARALLELISM": "true", "NCCL_DEBUG": "WARN", "VLLM_LOGGING_LEVEL": "WARN"}
-            },
-            num_cpus=config.ray_init.num_cpus,
-        )
+        runtime_env={
+            "env_vars": {
+                "TOKENIZERS_PARALLELISM": "true",
+                "NCCL_DEBUG": "WARN",
+                "VLLM_LOGGING_LEVEL": "WARN"
+            }
+        },
+        num_cpus=config.ray_init.num_cpus,
+        _system_config={
+            "object_spilling_config": json.dumps({
+                "type": "filesystem",
+                "params": {
+                    "directory_path": ["/app/deepeye/ray_spill"]
+                }
+            })
+        }
+    )
 
     runner = TaskRunner.remote()
     ray.get(runner.run.remote(config))

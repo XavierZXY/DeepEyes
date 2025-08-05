@@ -738,10 +738,13 @@ class RayPPOTrainer:
 
         if self.use_rm:
             self.rm_wg = all_wg["rm"]
+          
             self.rm_wg.init_model()
 
         # we should create rollout at the end so that vllm can have a better estimation of kv cache memory
         self.actor_rollout_wg = all_wg["actor_rollout"]
+        print(self.actor_rollout_wg)
+        print('-'*50)
         self.actor_rollout_wg.init_model()
 
     def _save_checkpoint(self):
