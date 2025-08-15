@@ -1,6 +1,14 @@
 working_dir: ./
-excludes: ["/.git/"]
+excludes: 
+  - .git/
+  - docs/fig1.svg
+  - vllm/.git/
+  - data/
+  - logs/
+
 env_vars:
   TORCH_NCCL_AVOID_RECORD_STREAMS: "1"
+  PYTHONPATH: /usr/local/lib/python3.12/site-packages
+_disable_runtime_envs: true
   # If you are using vllm<=0.6.3, you might need to set the following environment variable to avoid bugs:
   # VLLM_ATTENTION_BACKEND: "XFORMERS"

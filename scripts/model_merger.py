@@ -39,8 +39,8 @@ parser.add_argument(
     "--local_dir",
     type=str,
     required=True,
-    help="The path for your saved model. For megatron, point to the base dir of model, rng, optimizer checkpoints, commonly be `config.default_local_dir/global_step_\{global_step\}`.",
-)
+    # help="The path for your saved model. For megatron, point to the base dir of model, rng, optimizer checkpoints, commonly be `config.default_local_dir/global_step_\{global_step\}`.",
+    )
 parser.add_argument("--target_dir", default=None, help="The path for the target model")
 parser.add_argument("--hf_upload_path", default=False, type=str, help="The path of the huggingface repo to upload")
 parser.add_argument("--test", action="store_true", help="test correctness of hf_model")

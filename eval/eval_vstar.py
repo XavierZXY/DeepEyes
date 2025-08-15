@@ -15,17 +15,24 @@ from openai import OpenAI
 import requests
 
 
+#parser = argparse.ArgumentParser()
+#parser.add_argument('--model_name', type=str, default='qwen', help='Model name for result save')
+#parser.add_argument('--api_key', type=str, default='EMPTY', help='API key')
+#parser.add_argument('--api_url', type=str, default='http://10.39.19.140:8000/v1', help='API URL')
+#parser.add_argument('--vstar_bench_path', type=str, default=None, help='Path to the V* benchmark')
+#parser.add_argument('--save_path', type=str, default=None, help='Path to save the results')
+#parser.add_argument('--eval_model_name', type=str, default=None, help='Model name for evaluation')
+#parser.add_argument('--num_workers', type=int, default=8)
+#args = parser.parse_args()
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_name', type=str, default='qwen', help='Model name for result save')
+parser.add_argument('--model_name', type=str, default='Qwen2.5_VL_7B_step10', help='Model name for result save')
 parser.add_argument('--api_key', type=str, default='EMPTY', help='API key')
-parser.add_argument('--api_url', type=str, default='http://10.39.19.140:8000/v1', help='API URL')
-parser.add_argument('--vstar_bench_path', type=str, default=None, help='Path to the V* benchmark')
-parser.add_argument('--save_path', type=str, default=None, help='Path to save the results')
-parser.add_argument('--eval_model_name', type=str, default=None, help='Model name for evaluation')
+parser.add_argument('--api_url', type=str, default='http://localhost:18901/v1', help='API URL')
+parser.add_argument('--vstar_bench_path', type=str, default='/app/datasets/HR-bench', help='Path to the V* benchmark')
+parser.add_argument('--save_path', type=str, default='./results', help='Path to save the results')
+parser.add_argument('--eval_model_name', type=str, default='/app/xiaominl/TIR_qwen2_5_vl_7b_10step_bs128/', help='Model name for evaluation')
 parser.add_argument('--num_workers', type=int, default=8)
 args = parser.parse_args()
-
-
 openai_api_key = args.api_key
 openai_api_base = args.api_url
 

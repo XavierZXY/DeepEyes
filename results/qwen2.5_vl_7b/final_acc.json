@@ -1,0 +1,251 @@
+{
+    "direct_attributes": 72.17391304347827,
+    "relative_position": 78.94736842105263,
+    "overall": 74.86910994764398,
+    "error_nums": {
+        "direct_attributes": 0,
+        "relative_position": 0
+    },
+    "error_preds": [
+        {
+            "pred_ans": "B. The flag has two colors.",
+            "question": "Does the flag have two or three colors?",
+            "answer": "The flag has three colors."
+        },
+        {
+            "pred_ans": "There is no dog visible in the image, so none of the provided color options (black, brown, white, gray) apply. The question cannot be answered with the given information.",
+            "question": "What is the color of the dog?",
+            "answer": "The color of the dog is black."
+        },
+        {
+            "pred_ans": "None of the options provided match the actual color of any vehicle present in the image. The image does not contain an electric rickshaw.",
+            "question": "What is the color of the electric rickshaw?",
+            "answer": "The color of the electric rickshaw is yellow."
+        },
+        {
+            "pred_ans": "The color of the mailbox is not discernible from the image.",
+            "question": "What is the color of the mailbox?",
+            "answer": "The color of the mailbox is black."
+        },
+        {
+            "pred_ans": "There is no van visible in the image, so I cannot provide the color of the van. The options given do not apply to the image content.",
+            "question": "What is the color of the van?",
+            "answer": "The color of the van is red."
+        },
+        {
+            "pred_ans": "There is no telephone visible in the image, so I cannot provide the color of the telephone.",
+            "question": "What is the color of the telephone?",
+            "answer": "The color of the telephone is orange."
+        },
+        {
+            "pred_ans": "The color of the scooter is not applicable here as there is no scooter in the image. The correct answer cannot be determined from the given options.",
+            "question": "What is the color of the scooter?",
+            "answer": "The color of the scooter is orange."
+        },
+        {
+            "pred_ans": "The color of the dress is not visible in the image. There is no dress present in the scene.",
+            "question": "What is the color of the dress?",
+            "answer": "The color of the dress is red."
+        },
+        {
+            "pred_ans": "The watch is not visible in the image, so its color cannot be determined. However, the tool was used to zoom in on the area where the watch might be located, but it did not reveal any watch.",
+            "question": "What is the color of the watch?",
+            "answer": "The color of the watch is white."
+        },
+        {
+            "pred_ans": "There is no visible cyclist or box in the image, so I cannot provide the color of a cyclist's box.",
+            "question": "What is the color of the cyclist's box?",
+            "answer": "The color of the cyclist's box is green."
+        },
+        {
+            "pred_ans": "The question cannot be answered based on the image provided. There is no flute present in the image.",
+            "question": "What is the color of the flute?",
+            "answer": "The color of the flute is black."
+        },
+        {
+            "pred_ans": "The image does not contain a visible SUV car, so the color cannot be determined. However, based on the bounding box provided, the car appears to be dark-colored, possibly black or dark gray, but this is speculative without a clear view of the vehicle's body.",
+            "question": "What is the color of the SUV car?",
+            "answer": "The color of the SUV car is silver."
+        },
+        {
+            "pred_ans": "None of the options apply because there is no guard or glove visible in the image.",
+            "question": "What is the color of the guard's glove?",
+            "answer": "The color of the guard's glove is white."
+        },
+        {
+            "pred_ans": "C. The color of the slippers is black.",
+            "question": "What is the color of the slippers?",
+            "answer": "The color of the slippers is blue."
+        },
+        {
+            "pred_ans": "The color of the handbag is not discernible from the image. There is no visible handbag in the scene.",
+            "question": "What is the color of the handbag?",
+            "answer": "The color of the handbag is white."
+        },
+        {
+            "pred_ans": "The image does not provide enough detail to identify the breed of the dog. The options given do not match the visible details in the image.",
+            "question": "What is the breed of the dog?",
+            "answer": "The breed of the dog is golden retriever."
+        },
+        {
+            "pred_ans": "The image does not contain a toothbrush, so none of the options A, B, C, or D apply.",
+            "question": "What is the color of the toothbrush?",
+            "answer": "The color of the toothbrush is red."
+        },
+        {
+            "pred_ans": "None of the provided options can be confirmed from the image. The image does not clearly show the color of the scarf.",
+            "question": "What is the color of the scarf?",
+            "answer": "The color of the scarf is green."
+        },
+        {
+            "pred_ans": "The question cannot be answered because there is no clock in the image.",
+            "question": "What is the color of the clock?",
+            "answer": "The color of the clock is green."
+        },
+        {
+            "pred_ans": "The image does not contain a flag, so the question cannot be answered based on the provided image.",
+            "question": "What is the color of the flag?",
+            "answer": "The color of the flag is blue and yellow."
+        },
+        {
+            "pred_ans": "The question cannot be answered with the given options because there is no motorcycle in the image. None of the provided options (A, B, C, D) apply.",
+            "question": "What is the color of the motorcycle?",
+            "answer": "The color of the motorcycle is orange."
+        },
+        {
+            "pred_ans": "The image does not provide sufficient information to determine the color of the Apple logo on the black bag. The options given suggest that the logo might be polychromatic, white, silver, or red. Since the image resolution and clarity do not allow for a precise identification of the logo's color, we cannot definitively choose any of these options.",
+            "question": "What is the color of the Apple logo?",
+            "answer": "The color of the Apple logo is polychromatic."
+        },
+        {
+            "pred_ans": "C. The color of the earring is silver.",
+            "question": "What is the color of the earring?",
+            "answer": "The color of the earring is blue."
+        },
+        {
+            "pred_ans": "The image does not contain a motorcycle, so it's not possible to determine its color.",
+            "question": "What is the color of the motorcycle?",
+            "answer": "The color of the motorcycle is black."
+        },
+        {
+            "pred_ans": "There is no water bottle visible in the image, so I cannot provide the color of a water bottle.",
+            "question": "What is the color of the water bottle?",
+            "answer": "The color of the water bottle is red."
+        },
+        {
+            "pred_ans": "The image does not contain a visible messenger bag, so none of the options A, B, C, or D can be confirmed as correct based on this image alone. If you have any other questions or need further assistance, feel free to ask!",
+            "question": "What is the color of the messenger bag?",
+            "answer": "The color of the messenger bag is black."
+        },
+        {
+            "pred_ans": "The image does not contain a trash can, so the color cannot be determined. The options provided do not apply.",
+            "question": "What is the color of the trash can?",
+            "answer": "The color of the trash can is black."
+        },
+        {
+            "pred_ans": "C. There are no person in the oil painting.",
+            "question": "How many people are in the oil painting?",
+            "answer": "There are 2 people in the oil painting."
+        },
+        {
+            "pred_ans": "B. The color of the broom is yellow.",
+            "question": "What is the color of the broom?",
+            "answer": "The color of the broom is black."
+        },
+        {
+            "pred_ans": "B. The pose of the woman with yellow backpack is standing.",
+            "question": "What is the pose of the woman with yellow backpack?",
+            "answer": "The pose of the woman with yellow backpack is squatting."
+        },
+        {
+            "pred_ans": "The image does not provide sufficient detail to accurately determine the color of the woman's dress. The options given do not match any discernible color in the image.",
+            "question": "What is the color of the woman's dress?",
+            "answer": "The color of the woman's dress is black."
+        },
+        {
+            "pred_ans": "None of the given options can be confirmed as correct based on the image. There is no visible suitcase in the picture.",
+            "question": "What is the color of the suitcase?",
+            "answer": "The color of the suitcase is brown."
+        },
+        {
+            "pred_ans": "The red chair is not visible in the image. The question might be referring to something else that isn't present in this scene.",
+            "question": "Is the red chair on the left or right side of the road?",
+            "answer": "The red chair is on the right side of the road."
+        },
+        {
+            "pred_ans": "B. The vehicle is closer to the camera.",
+            "question": "Which one is closer to the camera, the water bottle or the vehicle?",
+            "answer": "The water bottle is closer to the camera."
+        },
+        {
+            "pred_ans": "B. The baby carriage is on the left side of the cone.",
+            "question": "Is the baby carriage on the left or right side of the cone?",
+            "answer": "The baby carriage is on the right side of the cone."
+        },
+        {
+            "pred_ans": "The question cannot be answered accurately because there is no scooter present in the image. The image shows a square with people walking, buildings, and trees, but no scooters.",
+            "question": "Is the scooter on the left or right side of the cyclist?",
+            "answer": "The scooter is on the right side of the cyclist."
+        },
+        {
+            "pred_ans": "B. The pillar box is on the left side of the telephone booth.",
+            "question": "Is the pillar box on the left or right side of the telephone booth?",
+            "answer": "The pillar box is on the right side of the telephone booth."
+        },
+        {
+            "pred_ans": "The blue luggage is on the left side of the bus.",
+            "question": "Is the blue luggage on the left or right side of the bus?",
+            "answer": "The blue luggage is on the right side of the bus."
+        },
+        {
+            "pred_ans": "B. The telephone booth is on the left side of the yellow van.",
+            "question": "Is the telephone booth on the left or right side of the yellow van?",
+            "answer": "The telephone booth is on the right side of the yellow van."
+        },
+        {
+            "pred_ans": "B. The dog is on the left side of the blue bicycle.",
+            "question": "Is the dog on the left or right side of the blue bicycle?",
+            "answer": "The dog is on the right side of the blue bicycle."
+        },
+        {
+            "pred_ans": "There is no white truck visible in the image, so I cannot determine its position relative to the red truck. Please check for any errors in the question or provide a different image if necessary.",
+            "question": "Is the white truck on the left or right side of the red truck?",
+            "answer": "The white truck is on the right side of the red truck."
+        },
+        {
+            "pred_ans": "Since there is no red car in the image, it is not possible to determine its position relative to the police car. The correct answer is that the question cannot be answered based on the given image.",
+            "question": "Is the red car on the left or right side of the police car?",
+            "answer": "The red car is on the left side of the police car."
+        },
+        {
+            "pred_ans": "B. The bowl is on the left side of the faucet.",
+            "question": "Is the bowl on the left or right side of the faucet?",
+            "answer": "The bowl is on the right side of the faucet."
+        },
+        {
+            "pred_ans": "The yellow car is on the right side of the pool.",
+            "question": "Is the yellow car on the left or right side of the pool?",
+            "answer": "The yellow car is on the left side of the pool."
+        },
+        {
+            "pred_ans": "B. The motorcycle is on the right side of the street.",
+            "question": "Is the motorcycle on the left or right side of the street?",
+            "answer": "The motorcycle is on the left side of the street."
+        },
+        {
+            "pred_ans": "B. The bucket is on the left side of the plunger.",
+            "question": "Is the bucket on the left or right side of the plunger?",
+            "answer": "The bucket is on the right side of the plunger."
+        },
+        {
+            "pred_ans": "B. The volleyball is on the right side of the man with white cap.",
+            "question": "Is the volleyball on the left or right side of the man with white cap?",
+            "answer": "The volleyball is on the left side of the man with white cap."
+        },
+        {
+            "pred_ans": "Since there is no person on a horse in the image, it is not possible to determine the position of the sky wheel relative to that person. Therefore, neither option A nor B can be selected.",
+            "question": "Is the sky wheel on the left or right side of the person on the horse?",
+            "answer": "The sky wheel is on the right side of the person on the horse."
+        }
+    ]
+}

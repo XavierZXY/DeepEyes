@@ -76,6 +76,9 @@ def run_ppo(config) -> None:
         #     num_cpus=config.ray_init.num_cpus,
         # )
         ray.init(
+            # address='172.18.148.192:6379',
+            # address='0.0.0.0:6379',
+            address="auto",
         runtime_env={
             "env_vars": {
                 "TOKENIZERS_PARALLELISM": "true",
@@ -84,14 +87,15 @@ def run_ppo(config) -> None:
             }
         },
         num_cpus=config.ray_init.num_cpus,
-        _system_config={
-            "object_spilling_config": json.dumps({
-                "type": "filesystem",
-                "params": {
-                    "directory_path": ["/app/deepeye/ray_spill"]
-                }
-            })
-        }
+        # _system_config={
+        #     "object_spilling_config": json.dumps({
+        #         "type": "filesystem",
+        #         "params": {
+        #             "directory_path": ["/app/xiaominl/DeepEyes/ray_spill"]
+        #         }
+            # }
+        # )
+        # }
     )
 
     runner = TaskRunner.remote()

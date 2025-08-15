@@ -83,8 +83,23 @@ class ActorRolloutRefWorker(Worker):
     def __init__(self, config: DictConfig, role: str):
         super().__init__()
         self.config = config
+        self.role = role
+        
+        # Set visible devices based on role
+        import os
+        
+        
+        # Get GPU assignment from environment variables or use defaults
+        # actor_devices = os.environ.get("ACTOR_CUDA_VISIBLE_DEVICES", "4,5,6,7")
+        # rollout_devices = os.environ.get("ROLLOUT_CUDA_VISIBLE_DEVICES", "0,1,2,3")
+        
+        # # Set CUDA_VISIBLE_DEVICES based on role
+        # if role in ["actor", "actor_rollout", "actor_rollout_ref"]:
+        #     os.environ["CUDA_VISIBLE_DEVICES"] = '4,5,6,7'
+        # elif role == "rollout":
+        #     os.environ["CUDA_VISIBLE_DEVICES"] = 'rollout_devices'
+        import torch
         import torch.distributed
-
         if not torch.distributed.is_initialized():
             torch.distributed.init_process_group()
 
@@ -213,7 +228,8 @@ class ActorRolloutRefWorker(Worker):
                 actor_module_class = AutoModelForVision2Seq
             else:
                 actor_module_class = AutoModelForCausalLM
-
+            torch_dtype = torch.bfloat16
+            print('dtype:', torch_dtype)
             actor_module = actor_module_class.from_pretrained(
                 pretrained_model_name_or_path=local_path,
                 torch_dtype=torch_dtype,

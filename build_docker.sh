@@ -1,0 +1,37 @@
+docker run --rm -d \
+    -e HYDRA_FULL_ERROR=1 \
+    -e HIP_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+    -e ROCR_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+    -e CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+    -e NCCL_DEBUG=TRACE \
+    -e GPU_MAX_HW_QUEUES=2 \
+    -e TORCH_NCCL_HIGH_PRIORITY=1 \
+    -e NCCL_CHECKS_DISABLE=1 \
+    -e NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_8,mlx5_9 \
+    -e NCCL_IB_GID_INDEX=3 \
+    -e NCCL_CROSS_NIC=0 \
+    -e CUDA_DEVICE_MAX_CONNECTIONS=1 \
+    -e NCCL_PROTO=Simple \
+    -e RCCL_MSCCL_ENABLE=0 \
+    -e TOKENIZERS_PARALLELISM=false \
+    -e HSA_NO_SCRATCH_RECLAIM=1 \
+    -e TRANSFORMERS_CACHE=/root/.cache/huggingface \
+    -e HF_HOME=/root/.cache/huggingface \
+    --network host \
+    --device /dev/dri \
+    --device /dev/kfd \
+    --device /dev/infiniband \
+    --group-add video \
+    --cap-add SYS_PTRACE \
+    --security-opt seccomp=unconfined \
+    --privileged \
+    -v /media/4TB/datasets/:/app/datasets \
+    -v ${HOME}/.ssh:/root/.ssh \
+    -v /home/takisobe/xiaominl/:/app/xiaominl \
+    -v ${HOME}:${HOME} \
+    -v /media/4TB/models/:/app/models \
+    -w "/app/xiaominl" \
+    --shm-size 128G \
+    --name "TIP-VERL" \
+    rocm/vllm:rocm6.4.1_vllm_0.9.1_20250715 \
+    tail -f /dev/null

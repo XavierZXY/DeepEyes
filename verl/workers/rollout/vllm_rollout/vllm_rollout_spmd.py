@@ -162,7 +162,7 @@ class vLLMRollout(BaseRollout):
 
         # Offload vllm model to reduce peak memory usage
         self.inference_engine.sleep(level=1)
-
+        from vllm.worker import worker
         kwargs = dict(
             n=1,
             logprobs=0,  # can be set to 0 and let actor to recompute
