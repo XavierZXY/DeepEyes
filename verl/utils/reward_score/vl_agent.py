@@ -11,7 +11,7 @@ openai_api_base_list = [
     # "http://172.30.52.123:8000/v1",
     # "http://10.39.3.123:18901/v1",
     # ""http://172.18.148.44:18901/v1""
-    os.environ.get("LLM_AS_A_JUDGE_BASE", "http://172.18.148.44:18901/v1"),
+    os.environ.get("LLM_AS_A_JUDGE_BASE", "http://172.18.148.193:18901/v1"),
 ]
 
 client_list = []
@@ -259,7 +259,7 @@ def compute_score(predict_str: str, ground_truth: str, extra_info=None) -> float
         is_format_error = True
 
     tool_reward_base = 1.0 if count_vision_1 > 0 else 0.0
-    tool_reward = 1.0 if count_vision_1 > 0 and acc_reward > 0.5 else 0.0
+    tool_reward = 1 if count_vision_1 > 0 and acc_reward > 0.5 else 0.0
     format_reward = -1.0 if is_format_error else 0.0
     # reward 1
     # return 0.8 * acc_reward + 0.2 * format_reward + 0.4 * tool_reward_base

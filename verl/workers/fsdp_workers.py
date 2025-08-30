@@ -228,7 +228,7 @@ class ActorRolloutRefWorker(Worker):
                 actor_module_class = AutoModelForVision2Seq
             else:
                 actor_module_class = AutoModelForCausalLM
-            torch_dtype = torch.bfloat16
+            # torch_dtype = torch.bfloat16
             print('dtype:', torch_dtype)
             actor_module = actor_module_class.from_pretrained(
                 pretrained_model_name_or_path=local_path,
