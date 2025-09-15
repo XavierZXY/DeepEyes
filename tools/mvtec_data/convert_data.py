@@ -64,14 +64,12 @@ def _read_jsonl(path: str) -> List[Dict[str, Any]]:
 
 def _resolve_image_path(item: Dict[str, Any], root: str) -> Optional[str]:
     # Prefer 'foreground' if present, else fallback to 'filename'
-    for key in ("foreground", "filename"):
-        val = item.get(key)
-        if isinstance(val, str):
-            candidate = (
-                os.path.join(root, val) if not os.path.isabs(val) else val
-            )
-            if os.path.exists(candidate):
-                return candidate
+    key = "filename"
+    val = item.get(key)
+    if isinstance(val, str):
+        candidate = os.path.join(root, val) if not os.path.isabs(val) else val
+        if os.path.exists(candidate):
+            return candidate
     return None
 
 
