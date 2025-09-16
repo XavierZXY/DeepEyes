@@ -3,6 +3,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
+from re import I
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -27,12 +28,23 @@ logging.basicConfig(
 )
 log = logging.getLogger("rich")
 
-
-INSTRUCTION_PROMPT: str = (
-    "Detect the coordinates of defects, "
-    'The format should be in json form in the format ["bbox2d": [x1, y1, x2, y2], "bbox2d":[x1, y1, x2, y2]], x, y should be integers, '
-    'and return an empty list if there is no defect. For example,  [{"bbox2d": [100, 150, 200, 250]}, {"bbox2d": [300, 350, 400, 450]}]. '
+SYSTEM_PROMPT: str = (
+    "You are a highly precise and meticulous quality control inspector. Your primary mission is to analyze images and determine if any defects are present. Your decision must be grounded in visual evidence."
+    "Carefully follow these instructions for your response format:"
+    "**If you detect one or more defects:**"
+    "Your response MUST be structured with the following four tags in this exact order:"
+    '1.  `<think>`: Provide a step-by-step reasoning process. Describe the visual characteristics of the anomaly (e.g., "I observe a dark, irregular crack on the upper left surface...").'
+    '2.  `<location>`: Provide a JSON list of all detected defect locations. Each item in the list must be a JSON object with a "bbox2d" key and coordinates in `[x_min, y_min, x_max, y_max]` format. For example: `[{"bbox2d": [100, 150, 200, 250]}, {"bbox2d": [300, 350, 400, 450]}]`.'
+    '3.  `<type>`: Specify the type of defect found (e.g., "crack", "discoloration", "scratch", "hole", "surface" and "other"). If the type is uncertain, use "unspecified".'
+    '4.  `<answer>`: Conclude with "yes".'
+    "**If you detect NO defects:**"
+    "Your response MUST be structured with the following two tags:"
+    "1.  `<think>`: Explain why you believe the object is defect-free. Describe the normal and healthy features you observed."
+    "2.  `<location>`: Provide an empty JSON list."
+    '3.  `<type>`: "good".'
+    '4.  `<answer>`: Conclude with "no".'
 )
+INSTRUCTION_PROMPT: str = "Analyze this  image for defects. If there is no defect, answer 'no'. If there is defect, answer 'yes'."
 
 
 @dataclass
@@ -88,7 +100,7 @@ def _format_answer_bboxes(item: Dict[str, Any]) -> List[Dict[str, List[int]]]:
             continue
         x1, y1, x2, y2 = bbox
         try:
-            formatted.append({"bbox2d": [int(x1), int(y1), int(x2), int(y2)]})
+            formatted.append({"bbox_2d": [int(x1), int(y1), int(x2), int(y2)]})
         except Exception:
             # Skip invalid numeric conversions
             continue
@@ -97,8 +109,13 @@ def _format_answer_bboxes(item: Dict[str, Any]) -> List[Dict[str, List[int]]]:
 
 def _reward_model_value(item: Dict[str, Any]) -> Any:
     # Use original bboxes directly if present; else empty list
-    bboxes = item.get("bboxes")
-    return bboxes if bboxes else []
+    bboxes = _format_answer_bboxes(item)
+    answer = "yes" if item.get("label") == "1" else "no"
+    reward_value = {
+        "style": "model",
+        "ground_truth": {"answer": answer, "bboxes": bboxes},
+    }
+    return reward_value
 
 
 def convert(
@@ -133,20 +150,22 @@ def convert(
             )
             continue
 
-        prompt = [{"content": INSTRUCTION_PROMPT}]
+        prompt = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": INSTRUCTION_PROMPT},
+        ]
         images = [{"bytes": img_bytes}]
 
         reward_model = _reward_model_value(item)
-        answer_formatted = _format_answer_bboxes(item)
+        bboxes_formatted = _format_answer_bboxes(item)
 
         extra_info = {
-            "answer": answer_formatted,
-            "source_filename": item.get("filename"),
-            "foreground": item.get("foreground"),
-            "mask": item.get("mask"),
+            "answer": reward_model["ground_truth"],
+            "question": INSTRUCTION_PROMPT,
             "clsname": item.get("clsname"),
             "label": item.get("label"),
-            "label_name": item.get("label_name"),
+            "type": item.get("label_name"),
+            "bboxes": bboxes_formatted,
         }
         # Add sequential index for rows that are actually written
         extra_info["index"] = write_index
