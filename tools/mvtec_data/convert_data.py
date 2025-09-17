@@ -33,18 +33,18 @@ SYSTEM_PROMPT: str = (
     "Carefully follow these instructions for your response format:"
     "**If you detect one or more defects:**"
     "Your response MUST be structured with the following four tags in this exact order:"
-    '1.  `<think>`: Provide a step-by-step reasoning process. Describe the visual characteristics of the anomaly (e.g., "I observe a dark, irregular crack on the upper left surface...").'
-    '2.  `<location>`: Provide a JSON list of all detected defect locations. Each item in the list must be a JSON object with a "bbox2d" key and coordinates in `[x_min, y_min, x_max, y_max]` format. For example: `[{"bbox2d": [100, 150, 200, 250]}, {"bbox2d": [300, 350, 400, 450]}]`.'
-    '3.  `<type>`: Specify the type of defect found (e.g., "crack", "discoloration", "scratch", "hole", "surface" and "other"). If the type is uncertain, use "unspecified".'
-    '4.  `<answer>`: Conclude with "yes".'
+    '1.  `<think></think>`: Provide a step-by-step reasoning process. Describe the visual characteristics of the anomaly (e.g., "I observe a dark, irregular crack on the upper left surface...").'
+    '2.  `<location></location>`: Provide a JSON list of all detected defect locations. Each item in the list must be a JSON object with a "bbox2d" key and coordinates in `[x_min, y_min, x_max, y_max]` format. For example: `[{"bbox2d": [100, 150, 200, 250]}, {"bbox2d": [300, 350, 400, 450]}]`.'
+    '3.  `<type></type>`: Specify the type of defect found (e.g., "crack", "discoloration", "scratch", "hole", "surface" and "other"). If the type is uncertain, use "unspecified".'
+    '4.  `<answer></answer>`: Conclude with "yes".'
     "**If you detect NO defects:**"
     "Your response MUST be structured with the following two tags:"
-    "1.  `<think>`: Explain why you believe the object is defect-free. Describe the normal and healthy features you observed."
-    "2.  `<location>`: Provide an empty JSON list."
-    '3.  `<type>`: "good".'
-    '4.  `<answer>`: Conclude with "no".'
+    "1.  `<think></think>`: Explain why you believe the object is defect-free. Describe the normal and healthy features you observed."
+    "2.  `<location></location>`: Provide an empty JSON list."
+    '3.  `<type></type>`: "good".'
+    '4.  `<answer></answer>`: Conclude with "no".'
 )
-INSTRUCTION_PROMPT: str = "Analyze this  image for defects. If there is no defect, answer 'no'. If there is defect, answer 'yes'."
+INSTRUCTION_PROMPT: str = "<image>.\nAnalyze this  image for defects. If there is no defect, answer 'no'. If there is defect, answer 'yes'."
 
 
 @dataclass
@@ -110,7 +110,12 @@ def _format_answer_bboxes(item: Dict[str, Any]) -> List[Dict[str, List[int]]]:
 def _reward_model_value(item: Dict[str, Any]) -> Any:
     # Use original bboxes directly if present; else empty list
     bboxes = _format_answer_bboxes(item)
-    answer = "yes" if item.get("label") == "1" else "no"
+    # log.info(f"Item label: {item.get('label')}")
+    answer = (
+        "Yes. There has been a defect detected."
+        if item.get("label") == 1
+        else "No. There is no defect detected."
+    )
     reward_value = {
         "style": "model",
         "ground_truth": {"answer": answer, "bboxes": bboxes},
@@ -145,9 +150,7 @@ def convert(
             log.warning(f"[{idx}] Image file missing: {img_path}; skipping.")
             continue
         except Exception as e:
-            log.warning(
-                f"[{idx}] Failed to read image {img_path}: {e}; skipping."
-            )
+            log.warning(f"[{idx}] Failed to read image {img_path}: {e}; skipping.")
             continue
 
         prompt = [
@@ -261,9 +264,7 @@ def main() -> None:
         log.error(f"Input file not found: {input_path}")
         return
 
-    os.makedirs(
-        os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True
-    )
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True)
 
     convert(
         input_jsonl=input_path,

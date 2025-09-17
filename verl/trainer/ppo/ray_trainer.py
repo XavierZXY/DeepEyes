@@ -873,6 +873,159 @@ class RayPPOTrainer:
         )
         metrics.update(global_balance_stats)
 
+    def _trim_for_logging(self, text: str, limit: int = 200) -> str:
+        if not text:
+            return ""
+        single_line = " ".join(text.split())
+        if len(single_line) > limit:
+            return single_line[:limit] + "..."
+        return single_line
+
+    def _stringify_content(self, content) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            segments = []
+            for item in content:
+                if isinstance(item, dict):
+                    if "text" in item:
+                        segments.append(str(item["text"]))
+                    elif "content" in item:
+                        segments.append(str(item["content"]))
+                    elif "type" in item:
+                        segments.append(str(item["type"]))
+                    else:
+                        segments.append(str(item))
+                else:
+                    segments.append(str(item))
+            return " ".join(segment for segment in segments if segment)
+        return str(content)
+
+    def _stringify_prompt(self, raw_prompt_item) -> str:
+        if isinstance(raw_prompt_item, np.ndarray):
+            raw_prompt_item = raw_prompt_item.tolist()
+        if isinstance(raw_prompt_item, list):
+            message_texts = []
+            for message in raw_prompt_item:
+                if isinstance(message, dict):
+                    role = message.get("role", "unknown")
+                    content = self._stringify_content(message.get("content", ""))
+                    message_texts.append(f"{role}: {content}")
+                else:
+                    message_texts.append(str(message))
+            return " | ".join(filter(None, message_texts))
+        return str(raw_prompt_item)
+
+    def _get_prompt_text(self, gen_batch: DataProto, gen_batch_output: DataProto, sample_idx: int, response_length: int) -> str:
+        raw_prompts = gen_batch.non_tensor_batch.get("raw_prompt")
+        if raw_prompts is not None and len(raw_prompts) > sample_idx:
+            return self._stringify_prompt(raw_prompts[sample_idx])
+
+        prompts = gen_batch_output.batch.get("prompts")
+        attention_mask = gen_batch_output.batch.get("attention_mask")
+        if prompts is None:
+            return ""
+
+        prompt_tensor = prompts[sample_idx]
+        if prompt_tensor.is_cuda:
+            prompt_tensor = prompt_tensor.cpu()
+        prompt_ids = prompt_tensor.tolist()
+
+        if attention_mask is not None:
+            attn_tensor = attention_mask[sample_idx]
+            if attn_tensor.is_cuda:
+                attn_tensor = attn_tensor.cpu()
+            attn_list = attn_tensor.tolist()
+            prompt_mask = attn_list[:-response_length] if response_length <= len(attn_list) else attn_list
+            valid_prompt_tokens = int(sum(prompt_mask)) if prompt_mask else len(prompt_ids)
+            if valid_prompt_tokens > 0 and valid_prompt_tokens <= len(prompt_ids):
+                prompt_ids = prompt_ids[-valid_prompt_tokens:]
+
+        try:
+            return self.tokenizer.decode(prompt_ids, skip_special_tokens=True)
+        except Exception:
+            return str(prompt_ids)
+
+    def _get_response_text(self, gen_batch_output: DataProto, sample_idx: int) -> str:
+        responses = gen_batch_output.batch.get("responses")
+        if responses is None:
+            return ""
+
+        response_tensor = responses[sample_idx]
+        if response_tensor.is_cuda:
+            response_tensor = response_tensor.cpu()
+        response_ids = response_tensor.tolist()
+
+        attention_mask = gen_batch_output.batch.get("attention_mask")
+        if attention_mask is not None:
+            response_length = len(response_ids)
+            attn_tensor = attention_mask[sample_idx]
+            if attn_tensor.is_cuda:
+                attn_tensor = attn_tensor.cpu()
+            response_mask = attn_tensor.tolist()[-response_length:]
+            valid_response_tokens = int(sum(response_mask)) if response_mask else len(response_ids)
+            if valid_response_tokens > 0 and valid_response_tokens <= len(response_ids):
+                response_ids = response_ids[:valid_response_tokens]
+
+        pad_token_id = self.tokenizer.pad_token_id
+        if pad_token_id is None:
+            pad_token_id = self.tokenizer.eos_token_id
+        if pad_token_id is not None:
+            response_ids = [token for token in response_ids if token != pad_token_id]
+
+        try:
+            return self.tokenizer.decode(response_ids, skip_special_tokens=True)
+        except Exception:
+            return str(response_ids)
+
+    def _log_rollout_samples(self, gen_batch: DataProto, gen_batch_output: DataProto):
+        enable_logging_cfg = self.config.trainer.get("enable_rollout_logging", True)
+        if enable_logging_cfg in (False, None):
+            return
+
+        current_step = max(self.global_steps, 1)
+        log_interval_cfg = self.config.trainer.get("rollout_log_interval", 1)
+        try:
+            log_interval = int(log_interval_cfg)
+        except (TypeError, ValueError):
+            log_interval = 1
+        if log_interval <= 0:
+            log_interval = 1
+        if (current_step - 1) % log_interval != 0:
+            return
+
+        responses = gen_batch_output.batch.get("responses")
+        if responses is None:
+            return
+
+        batch_size = responses.shape[0]
+        if batch_size == 0:
+            return
+
+        response_length = responses.shape[-1]
+        num_to_log_cfg = self.config.trainer.get("rollout_samples_to_log", 2)
+        try:
+            num_to_log = int(num_to_log_cfg)
+        except (TypeError, ValueError):
+            num_to_log = 2
+        if num_to_log <= 0:
+            return
+        num_to_log = min(num_to_log, batch_size)
+
+        for sample_idx in range(num_to_log):
+            prompt_text = self._get_prompt_text(gen_batch, gen_batch_output, sample_idx, response_length)
+            response_text = self._get_response_text(gen_batch_output, sample_idx)
+
+            prompt_preview = self._trim_for_logging(prompt_text)
+            response_preview = self._trim_for_logging(response_text)
+
+            print(
+                f" [ROLLOUT] step={current_step} sample={sample_idx} prompt={prompt_preview}"
+            )
+            print(
+                f" [ROLLOUT] step={current_step} sample={sample_idx} response={response_preview}"
+            )
+
     def fit(self):
         """
         The training loop of PPO.
@@ -949,6 +1102,7 @@ class RayPPOTrainer:
                     # generate a batch
                     with _timer("gen", timing_raw):
                         gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
+                        self._log_rollout_samples(gen_batch, gen_batch_output)
 
                     if self.config.algorithm.adv_estimator == AdvantageEstimator.REMAX:
                         with _timer("gen_max", timing_raw):

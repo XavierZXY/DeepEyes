@@ -6,7 +6,7 @@ import requests
 from math_verify import parse, verify
 from openai import OpenAI
 
-openai_api_key = "sk-"
+openai_api_key = "sk-zcpfmgaslkexcovbqmefamrmssggpfyoijnmvnzophjjdzfp"
 openai_api_base_list = [
     # "http://172.30.52.123:8000/v1",
     # "http://10.39.3.123:18901/v1",
@@ -24,7 +24,7 @@ model_name_list = []
 for client in client_list:
     # response = requests.get(f"{api_base}/models")
     # models = response.json()
-    model_name_list.append("zai-org/GLM-4.5V")
+    model_name_list.append("Qwen/Qwen2-VL-72B-Instruct")
 
 
 def get_chat_template():
