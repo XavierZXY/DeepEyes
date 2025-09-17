@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import random
 import re
@@ -6,6 +7,13 @@ import re
 import requests
 from math_verify import parse, verify
 from openai import OpenAI
+
+from verl.utils.reward_score.qwen_utils.utils import (
+    reverse_convert_to_original_format,
+    smart_resize,
+)
+
+log = logging.getLogger("rich")
 
 openai_api_key = "EMPTY"
 openai_api_base_list = [
@@ -87,30 +95,36 @@ Judgement: 0
 Judgement: 0
 """  # noqa
 
-    return [example_1, example_2, example_3, example_4, example_5, example_6, example_7]
+    return [
+        example_1,
+        example_2,
+        example_3,
+        example_4,
+        example_5,
+        example_6,
+        example_7,
+    ]
 
 
 COMMON_VERIFY_PROMPT = """# CONTEXT #
-I am a teacher, and I have some high-level reasoning problems. I am tasked with evaluating the correctness of a student's answer. 
-Below, I am provided with a problem and a reference answer. Additionally, a student's answer is provided. My job is to assess whether the student's answer captures the same meaning as the reference answer, even when expressed with different wording or format.
+You are evaluating a defect detection response for industrial anomaly inspection.
+The model must strictly follow this output format with tags in order: <think>, <location>, <type>, <answer>.
 
 # OBJECTIVE #
-I need you to judge whether the student's answer is correct given the ground truth answer.
-
-Your tasks include:
-1. Identify Semantic Equivalence: Carefully examine the expression in both answers. Confirm whether the semantic meaning of student's final answer is equivalent to the reference answer, even when expressed with different wording or format.
+Judge whether the student's FINAL decision (<answer> tag: yes/no) matches the ground truth decision, regardless of wording.
+Do not consider formatting issues here beyond extracting the final decision. Focus on semantic equivalence of the decision.
 
 # TONE #
 Professional, scientific.
 
 # RESPONSE: MARKDOWN REPORT #
 ## Equivalence Judgement
-[Whether the student's answer share the same meaning with the reference answer. (TRUE or FALSE)]
+[Whether the student's final decision matches the reference decision. (TRUE or FALSE)]
 
 # ATTENTION #
- - The reference answer is ALWAYS correct. You should carefully judge whether the student gives the same answer as reference answer.
- - The Equivalence Judgement is only TRUE or FALSE. The answer is FALSE even if the student's final answer almost correct with a minor mistakes.
- - Don't give extra explanation.
+ - The reference answer is ALWAYS correct.
+ - Only evaluate the equivalence of the final decision (yes/no or defect-free vs defective), not the reasoning details.
+ - Output only TRUE or FALSE in the judgement section.
 
 **Question**:
 {query}
@@ -222,6 +236,142 @@ def extract_type(text):
     return None
 
 
+def _parse_predicted_bboxes(location_text):
+    """Parse predicted bboxes from location JSON string into list of [x1,y1,x2,y2]."""
+    if not location_text:
+        return []
+    try:
+        loc = json.loads(location_text)
+        boxes = []
+        if isinstance(loc, list):
+            for item in loc:
+                if isinstance(item, dict):
+                    if (
+                        "bbox2d" in item
+                        and isinstance(item["bbox2d"], list)
+                        and len(item["bbox2d"]) == 4
+                    ):
+                        boxes.append([float(v) for v in item["bbox2d"]])
+                    elif (
+                        "bbox_2d" in item
+                        and isinstance(item["bbox_2d"], list)
+                        and len(item["bbox_2d"]) == 4
+                    ):
+                        boxes.append([float(v) for v in item["bbox_2d"]])
+        return boxes
+    except Exception as e:
+        log.error(f"Failed to parse predicted bboxes: {e}")
+        return []
+
+
+def _extract_gt_bboxes(ground_truth, extra_info):
+    """Extract ground truth bboxes list[[x1,y1,x2,y2]]."""
+    boxes = []
+    # Prefer ground_truth dict
+    try:
+        if isinstance(ground_truth, dict) and "bboxes" in ground_truth:
+            gt_boxes = ground_truth["bboxes"]
+            try:
+                iterable = list(gt_boxes)
+            except Exception:
+                iterable = []
+            if iterable:
+                for item in iterable:
+                    if isinstance(item, dict):
+                        arr = item.get("bbox2d") or item.get("bbox_2d")
+                        if isinstance(arr, list) and len(arr) == 4:
+                            boxes.append([float(v) for v in arr])
+        # Fallback to extra_info
+        if not boxes and extra_info and "bboxes" in extra_info:
+            gt_boxes = extra_info["bboxes"]
+            try:
+                iterable = list(gt_boxes)
+            except Exception:
+                iterable = []
+            if iterable:
+                for item in iterable:
+                    if isinstance(item, dict):
+                        arr = item.get("bbox2d") or item.get("bbox_2d")
+                        if isinstance(arr, list) and len(arr) == 4:
+                            boxes.append([float(v) for v in arr])
+    except Exception as e:
+        log.error(f"Failed to extract GT bboxes: {e}")
+    return boxes
+
+
+def _bbox_iou_xyxy(box_a, box_b):
+    x1 = max(box_a[0], box_b[0])
+    y1 = max(box_a[1], box_b[1])
+    x2 = min(box_a[2], box_b[2])
+    y2 = min(box_a[3], box_b[3])
+    inter_w = max(0.0, x2 - x1)
+    inter_h = max(0.0, y2 - y1)
+    inter = inter_w * inter_h
+    area_a = max(0.0, box_a[2] - box_a[0]) * max(0.0, box_a[3] - box_a[1])
+    area_b = max(0.0, box_b[2] - box_b[0]) * max(0.0, box_b[3] - box_b[1])
+    union = area_a + area_b - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _soft_iou_reward(pred_boxes, gt_boxes):
+    """Compute a soft reward based on IoU matching with lenient mapping.
+    Quickly gives decent reward for moderate overlap, not requiring very high IoU.
+    """
+    # Empty cases
+    if len(gt_boxes) == 0 and len(pred_boxes) == 0:
+        return 1.0
+    if len(gt_boxes) == 0 and len(pred_boxes) > 0:
+        return 0.0
+    if len(gt_boxes) > 0 and len(pred_boxes) == 0:
+        return 0.0
+
+    # Compute best matches (gt->pred and pred->gt), then take the better average
+    def avg_best_iou(sources, targets):
+        if not sources:
+            return 0.0
+        vals = []
+        for s in sources:
+            best = 0.0
+            for t in targets:
+                best = max(best, _bbox_iou_xyxy(s, t))
+            vals.append(best)
+        return sum(vals) / len(vals) if vals else 0.0
+
+    avg1 = avg_best_iou(gt_boxes, pred_boxes)
+    avg2 = avg_best_iou(pred_boxes, gt_boxes)
+    base = max(avg1, avg2)
+    # Lenient mapping: 0.5 IoU -> full, 0.3 -> good reward
+    return min(1.0, base / 0.5)
+
+
+def _maybe_rescale_pred_boxes_to_original(pred_boxes, extra_info):
+    """If original image shape is available in extra_info (img_shape=(H,W)),
+    assume model used smart_resize(H,W) and rescale predicted boxes back to original.
+    """
+    if not extra_info:
+        return pred_boxes
+    img_shape = extra_info.get("img_shape") or extra_info.get("image_shape")
+    if (
+        not img_shape
+        or not isinstance(img_shape, (list, tuple))
+        or len(img_shape) < 2
+    ):
+        return pred_boxes
+    try:
+        orig_h, orig_w = int(img_shape[0]), int(img_shape[1])
+        new_h, new_w = smart_resize(orig_h, orig_w)
+        restored = []
+        for box in pred_boxes:
+            x1, y1, x2, y2 = reverse_convert_to_original_format(
+                box, orig_h, orig_w, new_h, new_w
+            )
+            restored.append([float(x1), float(y1), float(x2), float(y2)])
+        return restored
+    except Exception as e:
+        log.error(f"Failed to rescale predicted boxes: {e}")
+        return pred_boxes
+
+
 def _extract_ground_truth_answer(ground_truth, extra_info):
     """Return the textual ground truth answer if available."""
     answer = None
@@ -243,7 +393,9 @@ def _extract_ground_truth_answer(ground_truth, extra_info):
     return (answer or "").strip()
 
 
-def compute_score(predict_str: str, ground_truth: str, extra_info=None) -> float:
+def compute_score(
+    predict_str: str, ground_truth: str, extra_info=None
+) -> float:
     is_format_error = False
     # predict_str = "<think>" + predict_str
     count_think_1 = predict_str.count("<think>")
@@ -272,11 +424,13 @@ def compute_score(predict_str: str, ground_truth: str, extra_info=None) -> float
     if count_type_1 != count_type_2:
         is_format_error = True
 
-    answer_text = predict_str.split("<answer>")[-1].split("</answer>")[0].strip()
+    answer_text = (
+        predict_str.split("<answer>")[-1].split("</answer>")[0].strip()
+    )
     location_text = extract_location(predict_no_think)
     type_text = extract_type(predict_no_think)
 
-    # Check bbox format
+    # Check bbox format + accuracy
     bbox_format_ok = False
     if location_text:
         try:
@@ -284,22 +438,31 @@ def compute_score(predict_str: str, ground_truth: str, extra_info=None) -> float
             if isinstance(loc, list):
                 bbox_format_ok = all(
                     isinstance(item, dict)
-                    and "bbox2d" in item
-                    and isinstance(item["bbox2d"], list)
-                    and len(item["bbox2d"]) == 4
-                    and all(isinstance(x, (int, float)) for x in item["bbox2d"])
+                    and ("bbox2d" in item or "bbox_2d" in item)
+                    and isinstance(
+                        (item.get("bbox2d") or item.get("bbox_2d")), list
+                    )
+                    and len((item.get("bbox2d") or item.get("bbox_2d"))) == 4
                     for item in loc
                 )
         except (json.JSONDecodeError, TypeError):
             pass
-    bbox_reward = 1.0 if bbox_format_ok else 0.0
+    pred_boxes = _parse_predicted_bboxes(location_text)
+    pred_boxes = _maybe_rescale_pred_boxes_to_original(pred_boxes, extra_info)
+    gt_boxes = _extract_gt_bboxes(ground_truth, extra_info)
+    bbox_iou_reward = _soft_iou_reward(pred_boxes, gt_boxes)
+    bbox_reward = 0.2 * (1.0 if bbox_format_ok else 0.0) + 0.8 * bbox_iou_reward
 
     # Check type format and match
     ground_truth_answer = _extract_ground_truth_answer(ground_truth, extra_info)
     expected_type = (
         "good"
         if ground_truth_answer.lower().startswith("no")
-        else (extra_info.get("type", "unspecified") if extra_info else "unspecified")
+        else (
+            extra_info.get("type", "unspecified")
+            if extra_info
+            else "unspecified"
+        )
     )
     type_reward = 0.0
     if type_text and isinstance(type_text, str):
@@ -353,7 +516,7 @@ def compute_score(predict_str: str, ground_truth: str, extra_info=None) -> float
         0.8 * acc_reward
         + 0.2 * format_reward
         + 1.2 * tool_reward
-        + 0.4 * bbox_reward
+        + 0.6 * bbox_reward
         + 0.4 * type_reward
     )
 
@@ -393,7 +556,7 @@ def compute_common_reasoning(
     location_text = extract_location(predict_no_think)
     type_text = extract_type(predict_no_think)
 
-    # Check bbox format
+    # Check bbox format + accuracy
     bbox_format_ok = False
     if location_text:
         try:
@@ -409,14 +572,22 @@ def compute_common_reasoning(
                 )
         except (json.JSONDecodeError, TypeError):
             pass
-    bbox_reward = 1.0 if bbox_format_ok else 0.0
+    pred_boxes = _parse_predicted_bboxes(location_text)
+    pred_boxes = _maybe_rescale_pred_boxes_to_original(pred_boxes, extra_info)
+    gt_boxes = _extract_gt_bboxes(ground_truth, extra_info)
+    bbox_iou_reward = _soft_iou_reward(pred_boxes, gt_boxes)
+    bbox_reward = 0.2 * (1.0 if bbox_format_ok else 0.0) + 0.8 * bbox_iou_reward
 
     # Check type format and match
     ground_truth_answer = _extract_ground_truth_answer(ground_truth, extra_info)
     expected_type = (
         "good"
         if ground_truth_answer.lower().startswith("no")
-        else (extra_info.get("type", "unspecified") if extra_info else "unspecified")
+        else (
+            extra_info.get("type", "unspecified")
+            if extra_info
+            else "unspecified"
+        )
     )
     type_reward = 0.0
     if type_text and isinstance(type_text, str):
@@ -471,7 +642,7 @@ def compute_common_reasoning(
         0.8 * acc_reward
         + 0.2 * format_reward
         + 1.2 * tool_reward
-        + 0.4 * bbox_reward
+        + 0.6 * bbox_reward
         + 0.4 * type_reward
     )
 
@@ -519,7 +690,9 @@ def generative_verify(query, ground_truth, model_answer):
         print(" [ERROR math] verify bug output: ")
 
 
-def compute_score_math(predict_str: str, ground_truth: str, extra_info=None) -> float:
+def compute_score_math(
+    predict_str: str, ground_truth: str, extra_info=None
+) -> float:
     is_format_error = False
     # predict_str = "<think>" + predict_str
     count_think_1 = predict_str.count("<think>")
@@ -574,7 +747,11 @@ def compute_score_math(predict_str: str, ground_truth: str, extra_info=None) -> 
     expected_type = (
         "good"
         if ground_truth_answer.lower().startswith("no")
-        else (extra_info.get("type", "unspecified") if extra_info else "unspecified")
+        else (
+            extra_info.get("type", "unspecified")
+            if extra_info
+            else "unspecified"
+        )
     )
     type_reward = 0.0
     if type_text and isinstance(type_text, str):
@@ -608,7 +785,10 @@ def compute_score_math(predict_str: str, ground_truth: str, extra_info=None) -> 
             f" [DEBUG] query={extra_info['question']}, {ground_truth=}, {model_answer=}, {acc_reward=}, {format_reward=}"
         )
     return (
-        1.2 * acc_reward + 0.4 * format_reward + 0.4 * bbox_reward + 0.4 * type_reward
+        1.2 * acc_reward
+        + 0.4 * format_reward
+        + 0.4 * bbox_reward
+        + 0.4 * type_reward
     )
 
 
