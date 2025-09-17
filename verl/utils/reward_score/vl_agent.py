@@ -222,6 +222,27 @@ def extract_type(text):
     return None
 
 
+def _extract_ground_truth_answer(ground_truth, extra_info):
+    """Return the textual ground truth answer if available."""
+    answer = None
+
+    if isinstance(ground_truth, dict):
+        answer = ground_truth.get("answer")
+    elif isinstance(ground_truth, str):
+        answer = ground_truth
+    elif ground_truth is not None:
+        answer = str(ground_truth)
+
+    if answer is None and extra_info is not None:
+        answer_info = extra_info.get("answer")
+        if isinstance(answer_info, dict):
+            answer = answer_info.get("answer")
+        elif isinstance(answer_info, str):
+            answer = answer_info
+
+    return (answer or "").strip()
+
+
 def compute_score(predict_str: str, ground_truth: str, extra_info=None) -> float:
     is_format_error = False
     # predict_str = "<think>" + predict_str
@@ -274,17 +295,18 @@ def compute_score(predict_str: str, ground_truth: str, extra_info=None) -> float
     bbox_reward = 1.0 if bbox_format_ok else 0.0
 
     # Check type format and match
+    ground_truth_answer = _extract_ground_truth_answer(ground_truth, extra_info)
     expected_type = (
         "good"
-        if ground_truth.lower() == "no"
-        else extra_info.get("type", "unspecified")
+        if ground_truth_answer.lower().startswith("no")
+        else (extra_info.get("type", "unspecified") if extra_info else "unspecified")
     )
     type_reward = 0.0
     if type_text and isinstance(type_text, str):
         type_reward = 1.0 if type_text.lower() == expected_type.lower() else 0.0
 
-    question_text = extra_info["question"]
-    full_prompt = get_prompt(answer_text, ground_truth, question_text)
+    question_text = extra_info["question"] if extra_info else ""
+    full_prompt = get_prompt(answer_text, ground_truth_answer, question_text)
 
     client_idx = random.randint(0, len(client_list) - 1)
     client = client_list[client_idx]
@@ -390,10 +412,11 @@ def compute_common_reasoning(
     bbox_reward = 1.0 if bbox_format_ok else 0.0
 
     # Check type format and match
+    ground_truth_answer = _extract_ground_truth_answer(ground_truth, extra_info)
     expected_type = (
         "good"
-        if ground_truth.lower() == "no"
-        else extra_info.get("type", "unspecified")
+        if ground_truth_answer.lower().startswith("no")
+        else (extra_info.get("type", "unspecified") if extra_info else "unspecified")
     )
     type_reward = 0.0
     if type_text and isinstance(type_text, str):
@@ -406,13 +429,13 @@ def compute_common_reasoning(
         acc_reward = 0.0
         is_format_error = True
     else:
-        question_text = extra_info["question"]
+        question_text = extra_info["question"] if extra_info else ""
         client_idx = random.randint(0, len(client_list) - 1)
         client = client_list[client_idx]
         model_name = model_name_list[client_idx]
         full_prompt = COMMON_VERIFY_PROMPT.format(
             query=question_text,
-            gold_ans=ground_truth,
+            gold_ans=ground_truth_answer,
             pred_ans=answer_text,
         )
 
@@ -440,9 +463,10 @@ def compute_common_reasoning(
 
     tool_reward = 1.0 if count_vision_1 > 0 and acc_reward > 0.5 else 0.0
     format_reward = -1.0 if is_format_error else 0.0
-    print(
-        f" [DEBUG] query={extra_info['question']}, {ground_truth=}, {answer_text=}, {acc_reward=}, {format_reward=}"
-    )
+    if extra_info:
+        print(
+            f" [DEBUG] query={extra_info['question']}, {ground_truth=}, {answer_text=}, {acc_reward=}, {format_reward=}"
+        )
     return (
         0.8 * acc_reward
         + 0.2 * format_reward
@@ -546,10 +570,11 @@ def compute_score_math(predict_str: str, ground_truth: str, extra_info=None) -> 
     bbox_reward = 1.0 if bbox_format_ok else 0.0
 
     # Check type format and match
+    ground_truth_answer = _extract_ground_truth_answer(ground_truth, extra_info)
     expected_type = (
         "good"
-        if ground_truth.lower() == "no"
-        else extra_info.get("type", "unspecified")
+        if ground_truth_answer.lower().startswith("no")
+        else (extra_info.get("type", "unspecified") if extra_info else "unspecified")
     )
     type_reward = 0.0
     if type_text and isinstance(type_text, str):
@@ -566,19 +591,22 @@ def compute_score_math(predict_str: str, ground_truth: str, extra_info=None) -> 
             is_format_error = True
 
         model_answer = answer_list[-1]
-        if rule_math_verify(ground_truth, model_answer):
+        if rule_math_verify(ground_truth_answer, model_answer):
             acc_reward = 1.0
         else:
             acc_reward = (
                 1.0
-                if generative_verify(extra_info["question"], ground_truth, model_answer)
+                if generative_verify(
+                    extra_info["question"], ground_truth_answer, model_answer
+                )
                 else 0.0
             )
 
     format_reward = -1.0 if is_format_error else 0.0
-    print(
-        f" [DEBUG] query={extra_info['question']}, {ground_truth=}, {model_answer=}, {acc_reward=}, {format_reward=}"
-    )
+    if extra_info:
+        print(
+            f" [DEBUG] query={extra_info['question']}, {ground_truth=}, {model_answer=}, {acc_reward=}, {format_reward=}"
+        )
     return (
         1.2 * acc_reward + 0.4 * format_reward + 0.4 * bbox_reward + 0.4 * type_reward
     )

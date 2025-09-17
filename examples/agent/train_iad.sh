@@ -6,7 +6,7 @@ WORLD_SIZE=1
 export SAVE_CHECKPOINT_DIR=/data/models/zxy/verl_checkpoints
 # export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
 
-BASEDIR=/home/takisobe/zxy/codes/data
+BASEDIR=/data/datasets/MVTec-2k
 TRAIN_DATA=${BASEDIR}/train_dataset.parquet
 VALID_DATA=${BASEDIR}/valid_dataset.parquet
 
