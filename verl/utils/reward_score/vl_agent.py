@@ -1,3 +1,4 @@
+import json
 import os
 import random
 import re
@@ -6,11 +7,11 @@ import requests
 from math_verify import parse, verify
 from openai import OpenAI
 
-openai_api_key = "sk-zcpfmgaslkexcovbqmefamrmssggpfyoijnmvnzophjjdzfp"
+openai_api_key = "EMPTY"
 openai_api_base_list = [
     # "http://172.30.52.123:8000/v1",
     # "http://10.39.3.123:18901/v1",
-    os.environ.get("LLM_AS_A_JUDGE_BASE", "https://api.siliconflow.cn/v1"),
+    os.environ.get("LLM_AS_A_JUDGE_BASE", "http://GPUD4FC:9091/v1"),
 ]
 
 client_list = []
@@ -22,9 +23,9 @@ for api_base in openai_api_base_list:
     client_list.append(client)
 model_name_list = []
 for client in client_list:
-    # response = requests.get(f"{api_base}/models")
-    # models = response.json()
-    model_name_list.append("Qwen/Qwen2-VL-72B-Instruct")
+    response = requests.get(f"{api_base}/models")
+    models = response.json()
+    model_name_list.append(models["data"][0]["id"])
 
 
 def get_chat_template():
@@ -187,6 +188,40 @@ def extract_answer(text):
     return None
 
 
+def extract_location(text):
+    """
+    从给定的文本中提取<location></location>标签内部的内容。
+
+    参数:
+        text (str): 包含<location>标签的文本
+
+    返回:
+        str or None: 标签内部的内容，如果未找到则返回None。
+    """
+    pattern = r"<location>(.*?)</location>"
+    match = re.search(pattern, text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return None
+
+
+def extract_type(text):
+    """
+    从给定的文本中提取<type></type>标签内部的内容。
+
+    参数:
+        text (str): 包含<type>标签的文本
+
+    返回:
+        str or None: 标签内部的内容，如果未找到则返回None。
+    """
+    pattern = r"<type>(.*?)</type>"
+    match = re.search(pattern, text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return None
+
+
 def compute_score(predict_str: str, ground_truth: str, extra_info=None) -> float:
     is_format_error = False
     # predict_str = "<think>" + predict_str
@@ -206,15 +241,47 @@ def compute_score(predict_str: str, ground_truth: str, extra_info=None) -> float
     if count_answer_1 != count_answer_2:
         is_format_error = True
 
-    answer_text = predict_str.split("<answer>")[-1].split("</answer>")[0].strip()
+    count_location_1 = predict_no_think.count("<location>")
+    count_location_2 = predict_no_think.count("</location>")
+    if count_location_1 != count_location_2:
+        is_format_error = True
 
-    # pattern = re.compile(r'<\|im_start\|>assistant(.*?)$', re.DOTALL)  # 匹配最后一个 target 后的所有内容
-    # match = pattern.search(predict_str)
-    # if match:
-    #     answer_text = match.group(1).strip()
-    #     print(f'DEBUG{answer_text=}')
-    # else:
-    #     answer_text = ""
+    count_type_1 = predict_no_think.count("<type>")
+    count_type_2 = predict_no_think.count("</type>")
+    if count_type_1 != count_type_2:
+        is_format_error = True
+
+    answer_text = predict_str.split("<answer>")[-1].split("</answer>")[0].strip()
+    location_text = extract_location(predict_no_think)
+    type_text = extract_type(predict_no_think)
+
+    # Check bbox format
+    bbox_format_ok = False
+    if location_text:
+        try:
+            loc = json.loads(location_text)
+            if isinstance(loc, list):
+                bbox_format_ok = all(
+                    isinstance(item, dict)
+                    and "bbox2d" in item
+                    and isinstance(item["bbox2d"], list)
+                    and len(item["bbox2d"]) == 4
+                    and all(isinstance(x, (int, float)) for x in item["bbox2d"])
+                    for item in loc
+                )
+        except (json.JSONDecodeError, TypeError):
+            pass
+    bbox_reward = 1.0 if bbox_format_ok else 0.0
+
+    # Check type format and match
+    expected_type = (
+        "good"
+        if ground_truth.lower() == "no"
+        else extra_info.get("type", "unspecified")
+    )
+    type_reward = 0.0
+    if type_text and isinstance(type_text, str):
+        type_reward = 1.0 if type_text.lower() == expected_type.lower() else 0.0
 
     question_text = extra_info["question"]
     full_prompt = get_prompt(answer_text, ground_truth, question_text)
@@ -257,22 +324,16 @@ def compute_score(predict_str: str, ground_truth: str, extra_info=None) -> float
         acc_reward = 0.0
         is_format_error = True
 
-    tool_reward_base = 1.0 if count_vision_1 > 0 else 0.0
     tool_reward = 1.0 if count_vision_1 > 0 and acc_reward > 0.5 else 0.0
     format_reward = -1.0 if is_format_error else 0.0
-    # reward 1
-    # return 0.8 * acc_reward + 0.2 * format_reward + 0.4 * tool_reward_base
     # reward 2
-    return 0.8 * acc_reward + 0.2 * format_reward + 1.2 * tool_reward
-
-    # reward 2
-    # return 1.0 * acc_reward + 0.2 * format_reward + 1.0 * tool_reward + 0.2 * tool_reward_base
-    # reward 3
-    # tool_reward_alpha = 1.2 if count_vision_1 > 0 else 0.0
-    # return 1.0 * acc_reward * tool_reward_alpha + 0.2 * format_reward
-    # reward 4
-    # extra_reward = tool_reward_base * (count_vision_1 - 1) * (1 - acc_reward)
-    # return  0.8 * acc_reward + 0.2 * format_reward + 0.4 * tool_reward_base  + 0.2 * extra_reward
+    return (
+        0.8 * acc_reward
+        + 0.2 * format_reward
+        + 1.2 * tool_reward
+        + 0.4 * bbox_reward
+        + 0.4 * type_reward
+    )
 
 
 def compute_common_reasoning(
@@ -296,9 +357,48 @@ def compute_common_reasoning(
     if count_answer_1 != count_answer_2:
         is_format_error = True
 
-    answer_text = extract_answer(
-        predict_no_think
-    )  # predict_no_think.split("<answer>")[-1].split("</answer>")[0].strip()
+    count_location_1 = predict_no_think.count("<location>")
+    count_location_2 = predict_no_think.count("</location>")
+    if count_location_1 != count_location_2:
+        is_format_error = True
+
+    count_type_1 = predict_no_think.count("<type>")
+    count_type_2 = predict_no_think.count("</type>")
+    if count_type_1 != count_type_2:
+        is_format_error = True
+
+    answer_text = extract_answer(predict_no_think)
+    location_text = extract_location(predict_no_think)
+    type_text = extract_type(predict_no_think)
+
+    # Check bbox format
+    bbox_format_ok = False
+    if location_text:
+        try:
+            loc = json.loads(location_text)
+            if isinstance(loc, list):
+                bbox_format_ok = all(
+                    isinstance(item, dict)
+                    and "bbox2d" in item
+                    and isinstance(item["bbox2d"], list)
+                    and len(item["bbox2d"]) == 4
+                    and all(isinstance(x, (int, float)) for x in item["bbox2d"])
+                    for item in loc
+                )
+        except (json.JSONDecodeError, TypeError):
+            pass
+    bbox_reward = 1.0 if bbox_format_ok else 0.0
+
+    # Check type format and match
+    expected_type = (
+        "good"
+        if ground_truth.lower() == "no"
+        else extra_info.get("type", "unspecified")
+    )
+    type_reward = 0.0
+    if type_text and isinstance(type_text, str):
+        type_reward = 1.0 if type_text.lower() == expected_type.lower() else 0.0
+
     if not answer_text:
         acc_reward = 0.0
         is_format_error = True
@@ -338,13 +438,18 @@ def compute_common_reasoning(
                 print(f" [ERROR] judgement format invalid: {judgement}")
                 continue
 
-    tool_reward_base = 1.0 if count_vision_1 > 0 else 0.0
     tool_reward = 1.0 if count_vision_1 > 0 and acc_reward > 0.5 else 0.0
     format_reward = -1.0 if is_format_error else 0.0
     print(
         f" [DEBUG] query={extra_info['question']}, {ground_truth=}, {answer_text=}, {acc_reward=}, {format_reward=}"
     )
-    return 0.8 * acc_reward + 0.2 * format_reward + 1.2 * tool_reward
+    return (
+        0.8 * acc_reward
+        + 0.2 * format_reward
+        + 1.2 * tool_reward
+        + 0.4 * bbox_reward
+        + 0.4 * type_reward
+    )
 
 
 def rule_math_verify(ground_truth, model_answer):
@@ -387,7 +492,7 @@ def generative_verify(query, ground_truth, model_answer):
     elif "false" in judgement and "true" not in judgement:
         return False
     else:
-        print(f" [ERROR math] verify bug output: ")
+        print(" [ERROR math] verify bug output: ")
 
 
 def compute_score_math(predict_str: str, ground_truth: str, extra_info=None) -> float:
@@ -398,8 +503,59 @@ def compute_score_math(predict_str: str, ground_truth: str, extra_info=None) -> 
     if count_think_1 != count_think_2:
         is_format_error = True
 
-    model_answer = ""
+    count_vision_1 = predict_str.count("<|vision_start|><|image_pad|>")
+    count_vision_2 = predict_str.count("<|image_pad|><|vision_end|>")
+    if count_vision_1 != count_vision_2:
+        is_format_error = True
+
     predict_no_think = predict_str.split("</think>")[-1].strip()
+    count_answer_1 = predict_no_think.count("<answer>")
+    count_answer_2 = predict_no_think.count("</answer>")
+    if count_answer_1 != count_answer_2:
+        is_format_error = True
+
+    count_location_1 = predict_no_think.count("<location>")
+    count_location_2 = predict_no_think.count("</location>")
+    if count_location_1 != count_location_2:
+        is_format_error = True
+
+    count_type_1 = predict_no_think.count("<type>")
+    count_type_2 = predict_no_think.count("</type>")
+    if count_type_1 != count_type_2:
+        is_format_error = True
+
+    location_text = extract_location(predict_no_think)
+    type_text = extract_type(predict_no_think)
+
+    # Check bbox format
+    bbox_format_ok = False
+    if location_text:
+        try:
+            loc = json.loads(location_text)
+            if isinstance(loc, list):
+                bbox_format_ok = all(
+                    isinstance(item, dict)
+                    and "bbox2d" in item
+                    and isinstance(item["bbox2d"], list)
+                    and len(item["bbox2d"]) == 4
+                    and all(isinstance(x, (int, float)) for x in item["bbox2d"])
+                    for item in loc
+                )
+        except (json.JSONDecodeError, TypeError):
+            pass
+    bbox_reward = 1.0 if bbox_format_ok else 0.0
+
+    # Check type format and match
+    expected_type = (
+        "good"
+        if ground_truth.lower() == "no"
+        else extra_info.get("type", "unspecified")
+    )
+    type_reward = 0.0
+    if type_text and isinstance(type_text, str):
+        type_reward = 1.0 if type_text.lower() == expected_type.lower() else 0.0
+
+    model_answer = ""
     answer_pattern = r"\\boxed{([^}]+)}"
     answer_list = re.findall(answer_pattern, predict_no_think, flags=re.DOTALL)
     if len(answer_list) == 0:
@@ -423,7 +579,9 @@ def compute_score_math(predict_str: str, ground_truth: str, extra_info=None) -> 
     print(
         f" [DEBUG] query={extra_info['question']}, {ground_truth=}, {model_answer=}, {acc_reward=}, {format_reward=}"
     )
-    return 1.2 * acc_reward + 0.4 * format_reward
+    return (
+        1.2 * acc_reward + 0.4 * format_reward + 0.4 * bbox_reward + 0.4 * type_reward
+    )
 
 
 if __name__ == "__main__":
