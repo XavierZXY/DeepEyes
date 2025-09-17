@@ -1,3 +1,4 @@
+import ast
 import json
 import logging
 import os
@@ -240,24 +241,39 @@ def _parse_predicted_bboxes(location_text):
     """Parse predicted bboxes from location JSON string into list of [x1,y1,x2,y2]."""
     if not location_text:
         return []
+    # Try strict JSON first
     try:
         loc = json.loads(location_text)
-        boxes = []
-        if isinstance(loc, list):
-            for item in loc:
-                if isinstance(item, dict):
-                    if (
-                        "bbox2d" in item
-                        and isinstance(item["bbox2d"], list)
-                        and len(item["bbox2d"]) == 4
-                    ):
-                        boxes.append([float(v) for v in item["bbox2d"]])
-                    elif (
-                        "bbox_2d" in item
-                        and isinstance(item["bbox_2d"], list)
-                        and len(item["bbox_2d"]) == 4
-                    ):
-                        boxes.append([float(v) for v in item["bbox_2d"]])
+    except Exception:
+        # Try Python-literal style (single quotes, None, etc.)
+        try:
+            loc = ast.literal_eval(location_text)
+        except Exception:
+            loc = None
+
+    boxes = []
+    if isinstance(loc, list):
+        for item in loc:
+            if isinstance(item, dict):
+                arr = item.get("bbox2d") or item.get("bbox_2d")
+                if isinstance(arr, (list, tuple)) and len(arr) == 4:
+                    try:
+                        boxes.append([float(v) for v in arr])
+                    except Exception:
+                        continue
+    if boxes:
+        return boxes
+
+    # Regex fallback: extract any [x1,y1,x2,y2]
+    try:
+        import re
+
+        pattern = r"\[\s*([-+]?[0-9]*\.?[0-9]+)\s*,\s*([-+]?[0-9]*\.?[0-9]+)\s*,\s*([-+]?[0-9]*\.?[0-9]+)\s*,\s*([-+]?[0-9]*\.?[0-9]+)\s*\]"
+        matches = re.findall(pattern, location_text)
+        for m in matches:
+            vals = [float(x) for x in m]
+            if len(vals) == 4:
+                boxes.append(vals)
         return boxes
     except Exception as e:
         log.error(f"Failed to parse predicted bboxes: {e}")
