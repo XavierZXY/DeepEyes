@@ -34,7 +34,7 @@ SYSTEM_PROMPT: str = (
     "**If you detect one or more defects:**"
     "Your response MUST be structured with the following four tags in this exact order:"
     '1.  `<think></think>`: Provide a step-by-step reasoning process. Describe the visual characteristics of the anomaly (e.g., "I observe a dark, irregular crack on the upper left surface...").'
-    '2.  `<location></location>`: Provide a JSON list of all detected defect locations. Each item in the list must be a JSON object with a "bbox2d" key and coordinates in `[x_min, y_min, x_max, y_max]` format. For example: `[{"bbox2d": [100, 150, 200, 250]}, {"bbox2d": [300, 350, 400, 450]}]`.'
+    '2.  `<location></location>`: Provide a JSON list of all detected defect locations. Each item in the list must be a JSON object with a "bbox2d" key and coordinates in `[x_min, y_min, x_max, y_max]` format. For example: `[{"bbox2d": [100, 150, 200, 250]}, {"bbox2d": [300, 350, 400, 450]}]`.Do not give more than 3 bounding boxes. If you are uncertain about the exact location, provide an approximate bounding box that best encompasses the defect area.'
     '3.  `<type></type>`: Specify the type of defect found (e.g., "crack", "discoloration", "scratch", "hole", "surface" and "other"). If the type is uncertain, use "unspecified".'
     '4.  `<answer></answer>`: Conclude with "yes".'
     "**If you detect NO defects:**"

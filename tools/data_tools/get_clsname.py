@@ -25,13 +25,21 @@ def filter_jsonl(input_file, output_file, key, value):
                 print(f"Skipping a malformed line: {line.strip()} - Error: {e}")
 
 
-# Example usage:
-input_filename = "/data1/huggingface/hub/datasets--XimiaoZhang--MVTec-2K/snapshots/d52ff40b834d44cfcbea1fafc204666fc0da5b18/test_uni.jsonl"
-input_filename = "data/enhanced_dataset_with_bboxes.jsonl"
-output_filename = "data/transistor_data.jsonl"
-filter_key = "clsname"
-filter_value = "transistor"
+if __name__ == "__main__":
+    # Example usage:
+    input_filename = "/data1/huggingface/hub/datasets--XimiaoZhang--MVTec-2K/snapshots/d52ff40b834d44cfcbea1fafc204666fc0da5b18/test_uni.jsonl"
+    input_filename = "data/label/label_1.jsonl"
+    filter_key = "clsname"
+    filter_value = [
+        "wood",
+        "bottle",
+        "screw",
+        "grid",
+        "transistor",
+        "hazelnut",
+        "capsule",
+    ]
 
-filter_jsonl(input_filename, output_filename, filter_key, filter_value)
-
-print(f"data have saved to '{output_filename}' ")
+    for cls in filter_value:
+        output_filename = f"data/label/1/{cls}.jsonl"
+        filter_jsonl(input_filename, output_filename, filter_key, cls)
