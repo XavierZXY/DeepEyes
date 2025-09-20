@@ -14,12 +14,18 @@
 # from . import gsm8k, math, prime_math, prime_code
 import torch
 
-def _default_compute_score(data_source, solution_str, ground_truth, extra_info=None):
+
+def _default_compute_score(
+    data_source, solution_str, ground_truth, extra_info=None
+):
     if data_source == "openai/gsm8k":
         from . import gsm8k
 
         res = gsm8k.compute_score(solution_str, ground_truth)
-    elif data_source in ["lighteval/MATH", "DigitalLearningGmbH/MATH-lighteval"]:
+    elif data_source in [
+        "lighteval/MATH",
+        "DigitalLearningGmbH/MATH-lighteval",
+    ]:
         from . import math
 
         res = math.compute_score(solution_str, ground_truth)
@@ -48,40 +54,61 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
     elif data_source in ["codecontests", "apps", "codeforces", "taco"]:
         from . import prime_code
 
-        res = prime_code.compute_score(solution_str, ground_truth, continuous=True)
+        res = prime_code.compute_score(
+            solution_str, ground_truth, continuous=True
+        )
     elif data_source in ["hiyouga/geometry3k"]:
         from . import geo3k
 
         res = geo3k.compute_score(solution_str, ground_truth)
 
-    elif data_source in ['rag_v2-train']:
+    elif data_source in ["rag_v2-train"]:
         from . import agent
+
         res = agent.compute_score(solution_str, ground_truth)
-    elif data_source in ['rag_v2-test']:
+    elif data_source in ["rag_v2-test"]:
         from . import agent
+
         res = agent.compute_score_eval(solution_str, ground_truth)
 
-    elif data_source in ['vstar', 'vl_agent', 'chart']:
+    elif data_source in ["vstar", "vl_agent", "chart"]:
         from . import vl_agent
-        res = vl_agent.compute_score(solution_str, ground_truth, extra_info)
 
-    elif data_source in ['geoguessr']:
+        # res = vl_agent.compute_score(solution_str, ground_truth, extra_info)
+        res = vl_agent.compute_enhanced_score(
+            solution_str,
+            ground_truth,
+            extra_info,
+            grounding_strategy="multi_level",  # 多层级最宽松
+            use_bbox_reward=True,
+            bbox_reward_weight=0.5,  # 降低空间要求
+        )
+    elif data_source in ["geoguessr"]:
         from . import vl_agent
-        res = vl_agent.compute_common_reasoning(solution_str, ground_truth, extra_info)
 
-    elif data_source in ['thinklite_eureka', 'xince']:
+        res = vl_agent.compute_common_reasoning(
+            solution_str, ground_truth, extra_info
+        )
+
+    elif data_source in ["thinklite_eureka", "xince"]:
         from . import vl_agent
-        res = vl_agent.compute_score_math(solution_str, ground_truth, extra_info)
+
+        res = vl_agent.compute_score_math(
+            solution_str, ground_truth, extra_info
+        )
 
     elif data_source in ["frozenlake"]:
         res = 0.0
 
     else:
-        raise NotImplementedError(f"Reward function is not implemented for {data_source=}")
+        raise NotImplementedError(
+            f"Reward function is not implemented for {data_source=}"
+        )
 
     if isinstance(res, dict):
         return res
     elif isinstance(res, (int, float, bool)):
         return float(res)
     else:
+        return float(res[0])
         return float(res[0])
