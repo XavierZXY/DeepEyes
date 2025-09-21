@@ -38,7 +38,9 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
     batch, slen, num_key_value_heads, head_dim = hidden_states.shape
     if n_rep == 1:
         return hidden_states
-    hidden_states = hidden_states[:, :, :, None, :].expand(batch, slen, num_key_value_heads, n_rep, head_dim)
+    hidden_states = hidden_states[:, :, :, None, :].expand(
+        batch, slen, num_key_value_heads, n_rep, head_dim
+    )
     return hidden_states.reshape(batch, slen, num_key_value_heads * n_rep, head_dim)
 
 
@@ -66,7 +68,9 @@ def _ulysses_flash_attention_forward(
 
     ########## AlltoAll for Ulysses ##########
     if ulysses_sp_size > 1:
-        assert position_ids is not None, "position_ids is required for Ulysses sequence parallelism"
+        assert position_ids is not None, (
+            "position_ids is required for Ulysses sequence parallelism"
+        )
 
         # NOTE: repeat kv heads to be divided by sequence parallel. Instead of repeating nheads_q//nheads_k,
         # we choose to repeat sp_size//nheads_k, since flash_attention supports MQA/GQA.
@@ -88,13 +92,22 @@ def _ulysses_flash_attention_forward(
         # https://github.com/huggingface/transformers/pull/33932
 
         # (bsz, seq_len/n) -> (bsz, seq_len)
-        position_ids_list = [torch.empty_like(position_ids) for _ in range(ulysses_sp_size)]
-        torch.distributed.all_gather(position_ids_list, position_ids, group=get_ulysses_sequence_parallel_group())
+        position_ids_list = [
+            torch.empty_like(position_ids) for _ in range(ulysses_sp_size)
+        ]
+        torch.distributed.all_gather(
+            position_ids_list, position_ids, group=get_ulysses_sequence_parallel_group()
+        )
         position_ids = torch.concat(position_ids_list, dim=-1)
 
     # (bsz, seq_len, n_head/n, head_dim)
     attn_output = _flash_attention_forward(
-        query_states, key_states, value_states, *args, position_ids=position_ids, **kwargs
+        query_states,
+        key_states,
+        value_states,
+        *args,
+        position_ids=position_ids,
+        **kwargs,
     )
 
     ########## AlltoAll for Ulysses ##########
@@ -109,19 +122,32 @@ def apply_monkey_patch(model: PreTrainedModel, ulysses_sp_size: int):
     """Replace _flash_attention_forward to _ulysses_flash_attention_forward"""
     module = sys.modules[model.__module__]
 
-    num_attention_heads, num_key_value_heads = model.config.num_attention_heads, model.config.num_key_value_heads
+    num_attention_heads, num_key_value_heads = (
+        model.config.num_attention_heads,
+        model.config.num_key_value_heads,
+    )
     assert num_attention_heads % ulysses_sp_size == 0, (
         f"num_attention_heads {num_attention_heads} must be divisible by ulysses_sp_size {ulysses_sp_size}"
     )
-    assert num_key_value_heads % ulysses_sp_size == 0 or ulysses_sp_size % num_key_value_heads == 0, (
+    assert (
+        num_key_value_heads % ulysses_sp_size == 0
+        or ulysses_sp_size % num_key_value_heads == 0
+    ), (
         f"num_key_value_heads {num_key_value_heads} must be divisible by ulysses_sp_size {ulysses_sp_size}"
         f"or vise versa. Upon ulysses_sp_size % num_key_value_heads == 0,"
         f"kv heads are repeated to ensure correctness."
     )
     # TODO: VLM models only, unify monkey patch to LLM models.
-    if model.config.model_type in ("qwen2_vl", "qwen2_5_vl"):  # patch remove padding for qwen2vl mrope
-        from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLFlashAttention2
-        from transformers.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLFlashAttention2
+    if model.config.model_type in (
+        "qwen2_vl",
+        "qwen2_5_vl",
+    ):  # patch remove padding for qwen2vl mrope
+        from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+            Qwen2_5_VLAttention as Qwen2_5_VLFlashAttention2,
+        )
+        from transformers.models.qwen2_vl.modeling_qwen2_vl import (
+            Qwen2VLAttention as Qwen2VLFlashAttention2,
+        )
 
         from verl.models.transformers.qwen2_vl import ulysses_flash_attn_forward
 
@@ -157,4 +183,8 @@ def is_transformers_version_in_range(min_version: str, max_version: str) -> bool
         raise ModuleNotFoundError("The `transformers` package is not installed.")
 
     # Check if the version is within the specified range
-    return version.parse(min_version) <= version.parse(transformers_version) <= version.parse(max_version)
+    return (
+        version.parse(min_version)
+        <= version.parse(transformers_version)
+        <= version.parse(max_version)
+    )
