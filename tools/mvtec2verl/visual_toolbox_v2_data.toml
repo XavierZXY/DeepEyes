@@ -1,12 +1,12 @@
-input = "/home/zxy/codes/working/RL/DeepEyes/data/mini/mini.jsonl"
+input = "upload_data/train.jsonl"
 
 # Root directory for images (relative paths in JSONL will be resolved relative to this)
 # root = "."
-root = "/data1/huggingface/hub/datasets--XimiaoZhang--MVTec-2K/snapshots/d52ff40b834d44cfcbea1fafc204666fc0da5b18"
+root = "/home/takisobe@amd.com/zxy/data/MVTec-2K"
 
 # Output file path for the converted dataset
 # output = "verl_crop_dataset.parquet"
-output = "/home/zxy/codes/working/RL/DeepEyes/data/mini/mini_dataset.parquet"
+output = "data/train/train_dataset.parquet"
 
 # Output format: "parquet" or "jsonl"
 format = "parquet"
