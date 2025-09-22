@@ -15,9 +15,7 @@
 import torch
 
 
-def _default_compute_score(
-    data_source, solution_str, ground_truth, extra_info=None
-):
+def _default_compute_score(data_source, solution_str, ground_truth, extra_info=None):
     if data_source == "openai/gsm8k":
         from . import gsm8k
 
@@ -54,9 +52,7 @@ def _default_compute_score(
     elif data_source in ["codecontests", "apps", "codeforces", "taco"]:
         from . import prime_code
 
-        res = prime_code.compute_score(
-            solution_str, ground_truth, continuous=True
-        )
+        res = prime_code.compute_score(solution_str, ground_truth, continuous=True)
     elif data_source in ["hiyouga/geometry3k"]:
         from . import geo3k
 
@@ -86,20 +82,21 @@ def _default_compute_score(
     elif data_source in ["geoguessr"]:
         from . import vl_agent
 
-        res = vl_agent.compute_common_reasoning(
-            solution_str, ground_truth, extra_info
-        )
+        res = vl_agent.compute_common_reasoning(solution_str, ground_truth, extra_info)
 
     elif data_source in ["thinklite_eureka", "xince"]:
         from . import vl_agent
 
-        res = vl_agent.compute_score_math(
-            solution_str, ground_truth, extra_info
-        )
+        res = vl_agent.compute_score_math(solution_str, ground_truth, extra_info)
 
     elif data_source in ["frozenlake"]:
         res = 0.0
+    elif data_source in ["vstar_visual_toolbox_v2"]:
+        from . import visual_toolbox_v2_reward
 
+        res = visual_toolbox_v2_reward.compute_visual_toolbox_v2_score(
+            solution_str, ground_truth, extra_info
+        )
     else:
         raise NotImplementedError(
             f"Reward function is not implemented for {data_source=}"

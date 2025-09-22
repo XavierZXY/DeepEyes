@@ -27,14 +27,14 @@ logging.basicConfig(
 )
 log = logging.getLogger("rich")
 
-# System prompt from visual_toolbox_v2 (PROMPT.SYSTEM_PROMPT_V2)
-VISUAL_TOOLBOX_V2_SYSTEM_PROMPT: str = """You are a helpful assistant.
+# System prompt for visual_toolbox_v2 with defect detection focus
+VISUAL_TOOLBOX_V2_SYSTEM_PROMPT: str = """You are a highly precise and meticulous quality control inspector equipped with advanced visual analysis tools. Your primary mission is to analyze images and determine if any defects are present. Your decision must be grounded in visual evidence.
 
 # Tools
-You may call one or more functions to assist with the user query.
+You may call one or more functions to assist with defect detection:
 You are provided with function signatures within <tools></tools> XML tags:
 <tools>
-{"type":"function","function":{"name":"image_zoom_in_tool","description":"Zoom in on a specific region of an image by cropping it based on a bounding box (bbox) and an optional object label.","parameters":{"type":"object","properties":{"bbox_2d":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4,"description":"The bounding box of the region to zoom in, as [x1, y1, x2, y2], where (x1, y1) is the top-left corner and (x2, y2) is the bottom-right corner."},"label":{"type":"string","description":"The name or label of the object in the specified bounding box (optional)."}},"required":["bbox"]}}}
+{"type":"function","function":{"name":"image_zoom_in_tool","description":"Zoom in on a specific region of an image by cropping it based on a bounding box (bbox) and an optional object label. Use this tool to get a closer look at potential defects.","parameters":{"type":"object","properties":{"bbox_2d":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4,"description":"The bounding box of the region to zoom in, as [x1, y1, x2, y2], where (x1, y1) is the top-left corner and (x2, y2) is the bottom-right corner."},"label":{"type":"string","description":"The name or label of the object in the specified bounding box (optional)."}},"required":["bbox_2d"]}}}
 </tools>
 
 # How to call a tool
@@ -45,14 +45,33 @@ Return a json object with function name and arguments within <tool_call></tool_c
 
 **Example**:  
 <tool_call>  
-{"name": "image_zoom_in_tool", "arguments": {"bbox_2d": [10, 20, 100, 200], "label": "the apple on the desk"}}  
-</tool_call>"""
+{"name": "image_zoom_in_tool", "arguments": {"bbox_2d": [10, 20, 100, 200], "label": "potential defect area"}}  
+</tool_call>
 
-# User prompt from visual_toolbox_v2 (PROMPT.USER_PROMPT_V2)
+# Response Format
+Carefully follow these instructions for your response format:
+
+**If you detect one or more defects:**
+Your response MUST be structured with the following four tags in this exact order:
+1. `<think></think>`: Provide a step-by-step reasoning process. Describe the visual characteristics of the anomaly (e.g., "I observe a dark, irregular crack on the upper left surface..."). Use tools if needed for closer inspection.
+2. `<location></location>`: Provide a JSON list of all detected defect locations. Notice! You should give the location of only the defects, not the full object. Each item in the list must be a JSON object with a "bbox2d" key and coordinates in `[x_min, y_min, x_max, y_max]` format. For example: `[{"bbox2d": [100, 150, 200, 250]}, {"bbox2d": [300, 350, 400, 450]}]`. Do not give more than 3 bounding boxes. If you are uncertain about the exact location, provide an approximate bounding box that best encompasses the defect area.
+3. `<type></type>`: Specify the type of defect found (e.g., "crack", "discoloration", "scratch", "hole", "surface" and "other"). If the type is uncertain, use "unspecified".
+4. `<answer></answer>`: Conclude with "yes".
+
+**If you detect NO defects:**
+Your response MUST be structured with the following four tags:
+1. `<think></think>`: Explain why you believe the object is defect-free. Describe the normal and healthy features you observed. Use tools if needed for thorough inspection.
+2. `<location></location>`: Provide an empty JSON list.
+3. `<type></type>`: "good".
+4. `<answer></answer>`: Conclude with "no"."""
+
+# User prompt for defect detection with visual_toolbox_v2
 VISUAL_TOOLBOX_V2_USER_PROMPT: str = (
     "<image>\n"
-    "Think first, call **image_zoom_in_tool** if needed, then answer. Format strictly as: "
-    "<think>...</think> <tool_call>...</tool_call> (if tools needed) <answer>...</answer>"
+    "Analyze this image for defects. Use the image_zoom_in_tool if you need to examine specific areas more closely. "
+    "If there is no defect, answer 'no'. If there is a defect, answer 'yes'. "
+    "Format your response strictly as: <think>...</think> <tool_call>...</tool_call> (if tools needed) "
+    "<location>...</location> <type>...</type> <answer>...</answer>"
 )
 
 
@@ -118,8 +137,9 @@ def _format_answer_bboxes(item: Dict[str, Any]) -> List[Dict[str, List[int]]]:
 
 def _visual_toolbox_v2_reward_model_value(item: Dict[str, Any]) -> Any:
     """
-    Create reward model value specifically for visual_toolbox_v2 evaluation.
-    Aligns with the visual_toolbox_v2 environment and tools.
+    Create reward model value specifically for visual_toolbox_v2 defect detection evaluation.
+    Aligns with the visual_toolbox_v2 environment and tools for quality control inspection.
+    Uses the specialized visual_toolbox_v2_reward module for enhanced evaluation.
     """
     bboxes = _format_answer_bboxes(item)
     answer = (
@@ -128,12 +148,15 @@ def _visual_toolbox_v2_reward_model_value(item: Dict[str, Any]) -> Any:
         else "No. There is no defect detected."
     )
 
-    # Specify visual_toolbox_v2 reward model
+    # Specify visual_toolbox_v2 specific reward model
     reward_value = {
-        "style": "vl_agent",  # Use standard vl_agent reward system
+        "style": "visual_toolbox_v2",  # Use specialized visual_toolbox_v2 reward system
         "ground_truth": {"answer": answer, "bboxes": bboxes},
         "use_visual_tool": True,  # Enable visual tool functionality
-        "reward_function": "compute_vl_agent_score",  # Standard VL agent reward function
+        "reward_function": "compute_visual_toolbox_v2_score",  # Specialized VT2 reward function
+        "reward_module": "verl.utils.reward_score.visual_toolbox_v2_reward",  # Reference to new module
+        "enhanced_grounding": True,  # Enable enhanced grounding evaluation
+        "tool_aware_scoring": True,  # Enable tool-aware scoring
     }
     return reward_value
 
@@ -146,9 +169,9 @@ def convert_for_visual_toolbox_v2(
     limit: Optional[int] = None,
 ) -> Tuple[pd.DataFrame, List[Record]]:
     """
-    Convert data specifically for visual_toolbox_v2 training.
-    Uses visual_toolbox_v2-specific prompts and reward models that align with
-    the environment implementation.
+    Convert data specifically for visual_toolbox_v2 defect detection training.
+    Uses visual_toolbox_v2-specific prompts with defect detection focus and reward models
+    that align with the environment implementation for quality control inspection.
     """
     rows: List[Record] = []
     items = _read_jsonl(input_jsonl)
@@ -175,7 +198,7 @@ def convert_for_visual_toolbox_v2(
             )
             continue
 
-        # Use visual_toolbox_v2 specific prompts (aligned with PROMPT.py)
+        # Use visual_toolbox_v2 specific prompts for defect detection
         prompt = [
             {"role": "system", "content": VISUAL_TOOLBOX_V2_SYSTEM_PROMPT},
             {"role": "user", "content": VISUAL_TOOLBOX_V2_USER_PROMPT},
@@ -191,15 +214,29 @@ def convert_for_visual_toolbox_v2(
             "question": VISUAL_TOOLBOX_V2_USER_PROMPT,
             "clsname": item.get("clsname"),
             "label": item.get("label"),
-            "type": item.get("label_name"),
+            "type": item.get(
+                "label_name", "unspecified"
+            ),  # Defect type for visual_toolbox_v2
+            "defect_type": item.get(
+                "label_name", "unspecified"
+            ),  # Alternative key for defect type
+            "anomaly_type": item.get(
+                "label_name", "unspecified"
+            ),  # Another key for defect type
             "bboxes": bboxes_formatted,
             "tool_enabled": True,  # Mark as tool-enabled dataset
             "visual_toolbox_v2_available": True,  # Specific visual_toolbox_v2 flag
-            "reward_type": "vl_agent",  # Specify reward type
+            "reward_type": "visual_toolbox_v2",  # Specify specialized reward type
+            "reward_function": "compute_visual_toolbox_v2_score",  # Reference to the new function
+            "reward_module": "verl.utils.reward_score.visual_toolbox_v2_reward",  # Module path
             "supported_tools": [
                 "image_zoom_in_tool",
                 "image_rotate_tool",
             ],  # Tools available in visual_toolbox_v2
+            "enhanced_scoring": True,  # Flag for enhanced scoring capabilities
+            "grounding_evaluation": True,  # Enable grounding evaluation
+            "tool_usage_tracking": True,  # Enable tool usage tracking
+            "industrial_inspection": True,  # Mark as industrial inspection task
         }
         # Add sequential index for rows that are actually written
         extra_info["index"] = write_index
@@ -237,7 +274,7 @@ def convert_for_visual_toolbox_v2(
     if output_format == "parquet":
         df.to_parquet(output_path, index=False)
         log.info(
-            f"Processed {total_items} items for visual_toolbox_v2 (limit={limit if limit else 'none'}), "
+            f"Processed {total_items} items for visual_toolbox_v2 defect detection (limit={limit if limit else 'none'}), "
             f"wrote parquet with {len(df)} rows to: {output_path}"
         )
     elif output_format == "jsonl":
@@ -254,7 +291,7 @@ def convert_for_visual_toolbox_v2(
                 row_dict["images"] = images_serialized
                 f.write(json.dumps(row_dict, ensure_ascii=False) + "\n")
         log.info(
-            f"Processed {total_items} items for visual_toolbox_v2 (limit={limit if limit else 'none'}), "
+            f"Processed {total_items} items for visual_toolbox_v2 defect detection (limit={limit if limit else 'none'}), "
             f"wrote JSONL with {len(df)} rows to: {output_path}"
         )
     else:
