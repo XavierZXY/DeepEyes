@@ -44,15 +44,11 @@ Otherwise, you can continue to call tools within <tool_call></tool_call> for fur
         self.original_image = None
         self.crop_history = []  # Track cropping history
         self.current_crop_level = 0
-        self.max_crop_levels = (
-            3  # Limit maximum crop levels to prevent infinite loops
-        )
+        self.max_crop_levels = 3  # Limit maximum crop levels to prevent infinite loops
 
     def extract_answer(self, action_string: str) -> Optional[str]:
         """Extract answer from <answer></answer> tags"""
-        answer_matches = re.findall(
-            r"<answer>(.*?)</answer>", action_string, re.DOTALL
-        )
+        answer_matches = re.findall(r"<answer>(.*?)</answer>", action_string, re.DOTALL)
         return answer_matches[-1].strip() if answer_matches else None
 
     def extract_location(self, action_string: str) -> Optional[str]:
@@ -64,9 +60,7 @@ Otherwise, you can continue to call tools within <tool_call></tool_call> for fur
 
     def extract_type(self, action_string: str) -> Optional[str]:
         """Extract type from <type></type> tags"""
-        type_matches = re.findall(
-            r"<type>(.*?)</type>", action_string, re.DOTALL
-        )
+        type_matches = re.findall(r"<type>(.*?)</type>", action_string, re.DOTALL)
         return type_matches[-1].strip() if type_matches else None
 
     def extract_action(self, action_string: str) -> Optional[str]:
@@ -213,11 +207,14 @@ Otherwise, you can continue to call tools within <tool_call></tool_call> for fur
             done: Whether the episode is terminated
             info: Additional information
         """
+        print(" [DEBUG CropInspectionTool] -----")
         # Check if this is a final answer
         answer = self.extract_answer(action_string)
         location = self.extract_location(action_string)
         type_info = self.extract_type(action_string)
-
+        print(
+            f" [DEBUG CropInspectionTool] answer: {answer}, location: {location}, type: {type_info}"
+        )
         if answer is not None:
             # Episode is done, return final observation
             info = {
@@ -232,7 +229,9 @@ Otherwise, you can continue to call tools within <tool_call></tool_call> for fur
 
         # Extract tool call
         action = self.extract_action(action_string)
+        print(f" [DEBUG CropInspectionTool] action: {action}")
         if not action:
+            print(" [DEBUG CropInspectionTool] No valid tool call or answer found")
             return (
                 "",
                 0.0,
@@ -261,9 +260,7 @@ Otherwise, you can continue to call tools within <tool_call></tool_call> for fur
             if tool_name == "crop_from_location":
                 # Crop based on location information
                 location_text = args.get("location_data", "")
-                crop_index = args.get(
-                    "crop_index", 0
-                )  # Which bbox to crop if multiple
+                crop_index = args.get("crop_index", 0)  # Which bbox to crop if multiple
 
                 if self.current_crop_level >= self.max_crop_levels:
                     raise ValueError(
@@ -273,9 +270,7 @@ Otherwise, you can continue to call tools within <tool_call></tool_call> for fur
                 # Parse location data
                 bboxes = self.parse_location_bboxes(location_text)
                 if not bboxes:
-                    raise ValueError(
-                        "No valid bounding boxes found in location data"
-                    )
+                    raise ValueError("No valid bounding boxes found in location data")
 
                 # Rescale bboxes to original image coordinates if needed
                 rescaled_bboxes = self.maybe_rescale_bboxes_to_original(
@@ -283,9 +278,7 @@ Otherwise, you can continue to call tools within <tool_call></tool_call> for fur
                 )
 
                 if crop_index >= len(rescaled_bboxes):
-                    crop_index = (
-                        0  # Default to first bbox if index out of range
-                    )
+                    crop_index = 0  # Default to first bbox if index out of range
 
                 bbox = rescaled_bboxes[crop_index]
                 resized_bbox = self.maybe_resize_bbox(*bbox)
@@ -396,9 +389,7 @@ Otherwise, you can continue to call tools within <tool_call></tool_call> for fur
 
         return min(1.0, reward)
 
-    def reset(
-        self, raw_prompt, multi_modal_data, origin_multi_modal_data, **kwargs
-    ):
+    def reset(self, raw_prompt, multi_modal_data, origin_multi_modal_data, **kwargs):
         """Reset the tool state for a new episode"""
         self.chatml_history = raw_prompt
         self.multi_modal_data = origin_multi_modal_data.copy()
@@ -416,9 +407,7 @@ Otherwise, you can continue to call tools within <tool_call></tool_call> for fur
         self.height = self.multi_modal_data["image"][0].height
         self.width = self.multi_modal_data["image"][0].width
 
-        log.info(
-            f"Crop inspection tool reset: image size={self.width}x{self.height}"
-        )
+        log.info(f"Crop inspection tool reset: image size={self.width}x{self.height}")
 
 
 if __name__ == "__main__":

@@ -3,7 +3,6 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from re import I
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -28,45 +27,32 @@ logging.basicConfig(
 )
 log = logging.getLogger("rich")
 
-CROP_INSPECTION_SYSTEM_PROMPT: str = (
-    "You are an advanced quality control inspector equipped with crop inspection tools for detailed defect analysis. "
-    "Your mission is to thoroughly analyze images to determine if any defects are present using progressive inspection techniques."
-    "\n\n**INSPECTION METHODOLOGY:**\n"
-    "1. **Initial Assessment**: First examine the full image for potential defect areas\n"
-    "2. **Progressive Cropping**: Use the crop tool to focus on suspicious regions for detailed inspection\n"
-    "3. **Multi-level Analysis**: You can perform up to 3 levels of cropping to get increasingly detailed views\n"
-    "4. **Final Decision**: Make your final determination based on the detailed inspection\n"
-    "\n**AVAILABLE TOOLS:**\n"
-    "- `crop_from_location`: Crop specific regions based on location data for detailed inspection\n"
-    "  - Arguments: `location_data` (JSON string with bbox coordinates), `crop_index` (which bbox to crop)\n"
-    '  - Example: `{"name": "crop_from_location", "arguments": {"location_data": "[{\\"bbox2d\\": [100, 150, 200, 250]}]", "crop_index": 0}}`\n'
-    "\n**RESPONSE FORMAT:**\n"
-    "Your response must follow this structure:\n"
-    "1. `<think></think>`: Your reasoning process and inspection strategy\n"
-    "2. **Tool Usage** (if needed): Use `<tool_call></tool_call>` tags to crop suspicious areas\n"
-    "3. **Final Response** (required): Provide all four tags in this exact order:\n"
-    '   - `<answer></answer>`: "yes" if defects found, "no" if no defects\n'
-    "   - `<location></location>`: JSON list of defect locations (empty list if no defects)\n"
-    '   - `<type></type>`: Defect type ("good" if no defects, otherwise specify type like "crack", "scratch", etc.)\n'
-    "\n**LOCATION FORMAT:**\n"
-    'For defects, provide coordinates as: `[{"bbox2d": [x_min, y_min, x_max, y_max]}]`\n'
-    "Maximum 3 bounding boxes. If uncertain, provide approximate bounding box encompassing the defect area.\n"
-    "\n**DEFECT TYPES:**\n"
-    'Common types: "crack", "discoloration", "scratch", "hole", "surface", "contamination", "other"\n'
-    'Use "unspecified" if type is uncertain, "good" only if no defects found.\n'
-    "\n**INSPECTION STRATEGY:**\n"
-    "- Start with broad assessment of the entire image\n"
-    "- If suspicious areas are found, use crop tool to examine them closely\n"
-    "- Use progressive cropping (coarse to fine) for better accuracy\n"
-    "- Limit crops to 2-3 levels for efficiency\n"
-    "- Make final decision based on detailed inspection results"
-)
+# System prompt from visual_toolbox_v2 (PROMPT.SYSTEM_PROMPT_V2)
+VISUAL_TOOLBOX_V2_SYSTEM_PROMPT: str = """You are a helpful assistant.
 
-CROP_INSPECTION_INSTRUCTION_PROMPT: str = (
+# Tools
+You may call one or more functions to assist with the user query.
+You are provided with function signatures within <tools></tools> XML tags:
+<tools>
+{"type":"function","function":{"name":"image_zoom_in_tool","description":"Zoom in on a specific region of an image by cropping it based on a bounding box (bbox) and an optional object label.","parameters":{"type":"object","properties":{"bbox_2d":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4,"description":"The bounding box of the region to zoom in, as [x1, y1, x2, y2], where (x1, y1) is the top-left corner and (x2, y2) is the bottom-right corner."},"label":{"type":"string","description":"The name or label of the object in the specified bounding box (optional)."}},"required":["bbox"]}}}
+</tools>
+
+# How to call a tool
+Return a json object with function name and arguments within <tool_call></tool_call> XML tags:
+<tool_call>
+{"name": <function-name>, "arguments": <args-json-object>}
+</tool_call>
+
+**Example**:  
+<tool_call>  
+{"name": "image_zoom_in_tool", "arguments": {"bbox_2d": [10, 20, 100, 200], "label": "the apple on the desk"}}  
+</tool_call>"""
+
+# User prompt from visual_toolbox_v2 (PROMPT.USER_PROMPT_V2)
+VISUAL_TOOLBOX_V2_USER_PROMPT: str = (
     "<image>\n"
-    "Analyze this image for defects using crop inspection tools for detailed examination. "
-    "You may use the crop_from_location tool to examine suspicious areas more closely. "
-    "If there is no defect, answer 'no'. If there is a defect, answer 'yes'."
+    "Think first, call **image_zoom_in_tool** if needed, then answer. Format strictly as: "
+    "<think>...</think> <tool_call>...</tool_call> (if tools needed) <answer>...</answer>"
 )
 
 
@@ -130,10 +116,10 @@ def _format_answer_bboxes(item: Dict[str, Any]) -> List[Dict[str, List[int]]]:
     return formatted
 
 
-def _crop_reward_model_value(item: Dict[str, Any]) -> Any:
+def _visual_toolbox_v2_reward_model_value(item: Dict[str, Any]) -> Any:
     """
-    Create reward model value specifically for crop inspection tool evaluation.
-    Uses crop_inspection_reward instead of standard vl_agent reward.
+    Create reward model value specifically for visual_toolbox_v2 evaluation.
+    Aligns with the visual_toolbox_v2 environment and tools.
     """
     bboxes = _format_answer_bboxes(item)
     answer = (
@@ -142,17 +128,17 @@ def _crop_reward_model_value(item: Dict[str, Any]) -> Any:
         else "No. There is no defect detected."
     )
 
-    # Specify crop inspection reward model
+    # Specify visual_toolbox_v2 reward model
     reward_value = {
-        "style": "crop_inspection",  # Use crop inspection reward system
+        "style": "vl_agent",  # Use standard vl_agent reward system
         "ground_truth": {"answer": answer, "bboxes": bboxes},
-        "use_crop_tool": True,  # Enable crop tool functionality
-        "reward_function": "compute_crop_inspection_score",  # Specific reward function
+        "use_visual_tool": True,  # Enable visual tool functionality
+        "reward_function": "compute_vl_agent_score",  # Standard VL agent reward function
     }
     return reward_value
 
 
-def convert_for_crop_tool(
+def convert_for_visual_toolbox_v2(
     input_jsonl: str,
     dataset_root: str,
     output_path: str,
@@ -160,8 +146,9 @@ def convert_for_crop_tool(
     limit: Optional[int] = None,
 ) -> Tuple[pd.DataFrame, List[Record]]:
     """
-    Convert data specifically for crop inspection tool training.
-    Uses crop-specific prompts and reward models.
+    Convert data specifically for visual_toolbox_v2 training.
+    Uses visual_toolbox_v2-specific prompts and reward models that align with
+    the environment implementation.
     """
     rows: List[Record] = []
     items = _read_jsonl(input_jsonl)
@@ -183,40 +170,46 @@ def convert_for_crop_tool(
             log.warning(f"[{idx}] Image file missing: {img_path}; skipping.")
             continue
         except Exception as e:
-            log.warning(f"[{idx}] Failed to read image {img_path}: {e}; skipping.")
+            log.warning(
+                f"[{idx}] Failed to read image {img_path}: {e}; skipping."
+            )
             continue
 
-        # Use crop inspection specific prompts
+        # Use visual_toolbox_v2 specific prompts (aligned with PROMPT.py)
         prompt = [
-            {"role": "system", "content": CROP_INSPECTION_SYSTEM_PROMPT},
-            {"role": "user", "content": CROP_INSPECTION_INSTRUCTION_PROMPT},
+            {"role": "system", "content": VISUAL_TOOLBOX_V2_SYSTEM_PROMPT},
+            {"role": "user", "content": VISUAL_TOOLBOX_V2_USER_PROMPT},
         ]
         images = [{"bytes": img_bytes}]
 
-        # Use crop-specific reward model
-        reward_model = _crop_reward_model_value(item)
+        # Use visual_toolbox_v2-specific reward model
+        reward_model = _visual_toolbox_v2_reward_model_value(item)
         bboxes_formatted = _format_answer_bboxes(item)
 
         extra_info = {
             "answer": reward_model["ground_truth"],
-            "question": CROP_INSPECTION_INSTRUCTION_PROMPT,
+            "question": VISUAL_TOOLBOX_V2_USER_PROMPT,
             "clsname": item.get("clsname"),
             "label": item.get("label"),
             "type": item.get("label_name"),
             "bboxes": bboxes_formatted,
             "tool_enabled": True,  # Mark as tool-enabled dataset
-            "crop_tool_available": True,  # Specific crop tool flag
-            "reward_type": "crop_inspection",  # Specify reward type
+            "visual_toolbox_v2_available": True,  # Specific visual_toolbox_v2 flag
+            "reward_type": "vl_agent",  # Specify reward type
+            "supported_tools": [
+                "image_zoom_in_tool",
+                "image_rotate_tool",
+            ],  # Tools available in visual_toolbox_v2
         }
         # Add sequential index for rows that are actually written
         extra_info["index"] = write_index
 
         record = Record(
-            data_source="vstar_crop",  # Distinguish from regular vstar
+            data_source="vstar_visual_toolbox_v2",  # Distinguish from other variants
             prompt=prompt,
             images=images,
-            ability="vl_crop_inspection",  # New ability type
-            env_name="visual_toolbox_v2",  # Use crop inspection environment
+            ability="vl_agent",  # Standard VL agent ability
+            env_name="visual_toolbox_v2",  # Use visual_toolbox_v2 environment
             reward_model=reward_model,
             extra_info=extra_info,
         )
@@ -244,7 +237,7 @@ def convert_for_crop_tool(
     if output_format == "parquet":
         df.to_parquet(output_path, index=False)
         log.info(
-            f"Processed {total_items} items for crop inspection tool (limit={limit if limit else 'none'}), "
+            f"Processed {total_items} items for visual_toolbox_v2 (limit={limit if limit else 'none'}), "
             f"wrote parquet with {len(df)} rows to: {output_path}"
         )
     elif output_format == "jsonl":
@@ -261,7 +254,7 @@ def convert_for_crop_tool(
                 row_dict["images"] = images_serialized
                 f.write(json.dumps(row_dict, ensure_ascii=False) + "\n")
         log.info(
-            f"Processed {total_items} items for crop inspection tool (limit={limit if limit else 'none'}), "
+            f"Processed {total_items} items for visual_toolbox_v2 (limit={limit if limit else 'none'}), "
             f"wrote JSONL with {len(df)} rows to: {output_path}"
         )
     else:
@@ -283,11 +276,11 @@ def _load_config_from_toml(toml_path: str) -> Dict[str, Any]:
 
 
 def main() -> None:
-    # Load configuration from crop_data.toml located next to this script
+    # Load configuration from visual_toolbox_v2_data.toml located next to this script
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    toml_path = os.path.join(script_dir, "crop_data.toml")
+    toml_path = os.path.join(script_dir, "visual_toolbox_v2_data.toml")
 
-    # Fallback to data.toml if crop_data.toml doesn't exist
+    # Fallback to data.toml if visual_toolbox_v2_data.toml doesn't exist
     if not os.path.exists(toml_path):
         toml_path = os.path.join(script_dir, "data.toml")
         log.info("Using fallback data.toml configuration")
@@ -303,7 +296,7 @@ def main() -> None:
     input_path = cfg.get("input", "data.jsonl")
     dataset_root = cfg.get("root", ".")
     output_path = cfg.get(
-        "output", "verl_crop_dataset.parquet"
+        "output", "verl_visual_toolbox_v2_dataset.parquet"
     )  # Different default name
     output_format = cfg.get("format", "parquet")
     limit = cfg.get("limit", None)
@@ -312,9 +305,11 @@ def main() -> None:
         log.error(f"Input file not found: {input_path}")
         return
 
-    os.makedirs(os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True)
+    os.makedirs(
+        os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True
+    )
 
-    convert_for_crop_tool(
+    convert_for_visual_toolbox_v2(
         input_jsonl=input_path,
         dataset_root=dataset_root,
         output_path=output_path,

@@ -427,7 +427,7 @@ def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None):
     # non-agent data
     if action_string == "" or tool is None:
         return {}, 0.0, True, {}
-
+    print(f" [DEBUG tool] Executing tool: {tool.name} with action: {action_string}")
     tool_result, reward, done, info = tool.execute(action_string)
 
     # Log successful tool execution
@@ -436,8 +436,6 @@ def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None):
 
     # post-process
     if not tool_result:
-        print(f" [DEBUG tool] Successfully executed tool: {tool.name}")
-
         tool_result_info = {}
 
     elif isinstance(tool_result, str):

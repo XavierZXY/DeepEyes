@@ -8,7 +8,8 @@ from math import sqrt
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
-from math_verify import parse, verify
+
+# from math_verify import parse, verify
 from openai import OpenAI
 
 # Configure rich logging
@@ -36,11 +37,7 @@ def _maybe_rescale_pred_boxes_to_original(pred_boxes, extra_info):
     if not extra_info:
         return pred_boxes
     img_shape = extra_info.get("img_shape") or extra_info.get("image_shape")
-    if (
-        not img_shape
-        or not isinstance(img_shape, (list, tuple))
-        or len(img_shape) < 2
-    ):
+    if not img_shape or not isinstance(img_shape, (list, tuple)) or len(img_shape) < 2:
         return pred_boxes
     try:
         orig_h, orig_w = int(img_shape[0]), int(img_shape[1])
@@ -60,7 +57,7 @@ def _maybe_rescale_pred_boxes_to_original(pred_boxes, extra_info):
 # OpenAI client setup (reuse from vl_agent.py)
 openai_api_key = "EMPTY"
 openai_api_base_list = [
-    os.environ.get("LLM_AS_A_JUDGE_BASE", "http://GPUD4FC:9091/v1"),
+    os.environ.get("LLM_AS_A_JUDGE_BASE", "http://10.19.178.84:9092/v1"),
 ]
 
 client_list = []
@@ -311,9 +308,7 @@ def evaluate_crop_tool_usage(
             sizes.append(crop_size[0] * crop_size[1])
 
         # Check if sizes generally decrease (focusing in)
-        decreasing = all(
-            sizes[i] >= sizes[i + 1] for i in range(len(sizes) - 1)
-        )
+        decreasing = all(sizes[i] >= sizes[i + 1] for i in range(len(sizes) - 1))
         if decreasing:
             progression_score = 0.2
         else:
@@ -371,9 +366,7 @@ def evaluate_crop_tool_usage(
     return min(1.0, score), quality
 
 
-def extract_ground_truth_answer(
-    ground_truth: Any, extra_info: Optional[Dict]
-) -> str:
+def extract_ground_truth_answer(ground_truth: Any, extra_info: Optional[Dict]) -> str:
     """Extract the textual ground truth answer"""
     answer = None
 
@@ -461,11 +454,7 @@ def compute_crop_inspection_score(
     expected_type = (
         "good"
         if ground_truth_answer.lower().startswith("no")
-        else (
-            extra_info.get("type", "unspecified")
-            if extra_info
-            else "unspecified"
-        )
+        else (extra_info.get("type", "unspecified") if extra_info else "unspecified")
     )
 
     # Evaluate crop tool usage
@@ -484,9 +473,7 @@ def compute_crop_inspection_score(
                 bbox_format_ok = all(
                     isinstance(item, dict)
                     and ("bbox2d" in item or "bbox_2d" in item)
-                    and isinstance(
-                        (item.get("bbox2d") or item.get("bbox_2d")), list
-                    )
+                    and isinstance((item.get("bbox2d") or item.get("bbox_2d")), list)
                     and len((item.get("bbox2d") or item.get("bbox_2d"))) == 4
                     for item in loc
                 )
@@ -587,32 +574,26 @@ def compute_crop_inspection_score(
             # Fallback to basic evaluation
             acc_reward = (
                 1.0
-                if answer_text.lower().strip()
-                == ground_truth_answer.lower().strip()
+                if answer_text.lower().strip() == ground_truth_answer.lower().strip()
                 else 0.0
             )
             tool_usage_reward = crop_tool_score
             localization_reward = 0.5  # Neutral
             type_reward = (
-                1.0
-                if type_text and type_text.lower() == expected_type.lower()
-                else 0.0
+                1.0 if type_text and type_text.lower() == expected_type.lower() else 0.0
             )
     else:
         # Basic evaluation
         acc_reward = (
             1.0
             if answer_text
-            and answer_text.lower().strip()
-            == ground_truth_answer.lower().strip()
+            and answer_text.lower().strip() == ground_truth_answer.lower().strip()
             else 0.0
         )
         tool_usage_reward = crop_tool_score
         localization_reward = 0.5
         type_reward = (
-            1.0
-            if type_text and type_text.lower() == expected_type.lower()
-            else 0.0
+            1.0 if type_text and type_text.lower() == expected_type.lower() else 0.0
         )
 
     # Vision tool usage reward
