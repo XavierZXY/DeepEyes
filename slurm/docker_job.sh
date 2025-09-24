@@ -70,8 +70,6 @@ docker exec $CONTAINER_NAME bash -c "
   echo '--- 步骤1: 更新软件包并安装系统依赖 (tmux, git) ---';
   apt-get update && apt-get install -y tmux git;
 
-  echo '--- 步骤2: 解决 git 仓库所有权问题 ---';
-  git config --global --add safe.directory $DATA_DIR/codes/DeepEyes;
 
   echo '--- 步骤3: 安装 Python 依赖 (verl) ---';
   cd $DATA_DIR/codes/verl && pip install -e .;
@@ -111,31 +109,11 @@ sleep 300
 echo "启动verl训练会话..."
 docker exec $CONTAINER_NAME bash -c "
   cd $DATA_DIR/codes/DeepEyes && \
-  tmux new-session -d -s verl && \
-  tmux send-keys -t verl 'export ROCR_VISIBLE_DEVICES=0,1,2,3,4,5,6' C-m && \
-  tmux send-keys -t verl 'bash examples/agent/train_iad.sh' C-m
+  bash examples/agent/train_iad.sh >> ../slurm/deepeyes_train_${SLURM_JOB_ID}.out 2>&1
 "
 
 echo "所有会话已启动，任务在后台运行。"
-echo "可通过以下命令进入容器查看进度："
-echo "docker exec -it $CONTAINER_NAME /bin/bash"
-echo "然后使用 'tmux attach -t vllm' 或 'tmux attach -t verl' 查看对应会话"
 
-# 监控任务运行状态
-echo "开始监控训练任务..."
-while true; do
-  # 检查两个tmux会话是否都在运行
-  VLLM_RUNNING=\$(docker exec $CONTAINER_NAME bash -c "tmux has-session -t vllm 2>/dev/null && echo 1 || echo 0")
-  VERL_RUNNING=\$(docker exec $CONTAINER_NAME bash -c "tmux has-session -t verl 2>/dev/null && echo 1 || echo 0")
-  
-  if [ \$VLLM_RUNNING -eq 0 ] && [ \$VERL_RUNNING -eq 0 ]; then
-    echo "所有tmux会话已结束，训练任务完成。"
-    break
-  fi
-  
-  echo "任务仍在运行中...（\$(date)）"
-  sleep 300  # 每5分钟检查一次
-done
 
 # 训练完成后停止并移除容器
 echo "训练完成，正在停止并清理容器..."

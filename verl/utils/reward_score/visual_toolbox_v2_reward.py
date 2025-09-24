@@ -224,7 +224,11 @@ def _maybe_rescale_pred_boxes_to_original(pred_boxes, extra_info):
         return pred_boxes
 
     img_shape = extra_info.get("img_shape") or extra_info.get("image_shape")
-    if not img_shape or not isinstance(img_shape, (list, tuple)) or len(img_shape) < 2:
+    if (
+        not img_shape
+        or not isinstance(img_shape, (list, tuple))
+        or len(img_shape) < 2
+    ):
         return pred_boxes
 
     try:
@@ -263,7 +267,9 @@ def _extract_ground_truth_answer(ground_truth, extra_info):
     return (answer or "").strip()
 
 
-def _visual_toolbox_v2_grounding_reward(pred_boxes, gt_boxes, pred_type, extra_info):
+def _visual_toolbox_v2_grounding_reward(
+    pred_boxes, gt_boxes, pred_type, extra_info
+):
     """
     Specialized grounding reward for visual_toolbox_v2 defect detection.
     Takes into account the specific needs of industrial defect detection.
@@ -322,7 +328,9 @@ def _visual_toolbox_v2_grounding_reward(pred_boxes, gt_boxes, pred_type, extra_i
     return min(1.0, total_reward)
 
 
-def _evaluate_visual_toolbox_v2_answer(answer_text, ground_truth_answer, question_text):
+def _evaluate_visual_toolbox_v2_answer(
+    answer_text, ground_truth_answer, question_text
+):
     """
     Enhanced answer evaluation specifically for visual_toolbox_v2 defect detection.
     """
@@ -499,7 +507,8 @@ def compute_visual_toolbox_v2_score(
                         and isinstance(
                             (item.get("bbox2d") or item.get("bbox_2d")), list
                         )
-                        and len((item.get("bbox2d") or item.get("bbox_2d"))) == 4
+                        and len((item.get("bbox2d") or item.get("bbox_2d")))
+                        == 4
                         and all(
                             isinstance(x, (int, float))
                             for x in (item.get("bbox2d") or item.get("bbox_2d"))
@@ -545,7 +554,9 @@ def compute_visual_toolbox_v2_score(
             type_reward = 1.0  # Perfect match for no defect case
         elif expected_type.lower() != "good" and type_text.lower() != "good":
             # Partial credit for detecting any defect type when defect exists
-            type_reward = 0.7 if type_text.lower() == expected_type.lower() else 0.3
+            type_reward = (
+                0.7 if type_text.lower() == expected_type.lower() else 0.3
+            )
         elif expected_type.lower() == "good" and type_text.lower() != "good":
             type_reward = 0.0  # False positive
         else:
@@ -562,7 +573,7 @@ def compute_visual_toolbox_v2_score(
         1.0 * acc_reward  # Answer accuracy (highest weight)
         + 0.8 * grounding_reward  # Grounding accuracy for defect localization
         + 0.6 * type_reward  # Defect type classification
-        + 0.8 * tool_reward  # Tool usage effectiveness
+        + 5 * tool_reward  # Tool usage effectiveness
         + format_reward  # Format penalty
         + bbox_format_reward  # Bbox format bonus
     )
@@ -574,6 +585,11 @@ def compute_visual_toolbox_v2_score(
             f"type={type_reward:.2f}, tool={tool_reward:.2f}, format={format_reward:.2f}, "
             f"bbox_fmt={bbox_format_reward:.2f}, final={final_score:.2f}"
         )
+    print(
+        f"Visual ToolBox V2 Score: acc={acc_reward:.2f}, grounding={grounding_reward:.2f}, "
+        f"type={type_reward:.2f}, tool={tool_reward:.2f}, format={format_reward:.2f}, "
+        f"bbox_fmt={bbox_format_reward:.2f}, final={final_score:.2f}"
+    )
 
     return max(0.0, final_score)
 
@@ -598,5 +614,7 @@ if __name__ == "__main__":
         "bboxes": [{"bbox2d": [145, 145, 185, 185]}],
     }
 
-    score = compute_visual_toolbox_v2_score(predict_str, ground_truth, extra_info)
+    score = compute_visual_toolbox_v2_score(
+        predict_str, ground_truth, extra_info
+    )
     print(f"Visual ToolBox V2 Score: {score:.3f}")
