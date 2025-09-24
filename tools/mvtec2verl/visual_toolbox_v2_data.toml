@@ -1,12 +1,12 @@
-input = "upload_data/train.jsonl"
+input = "upload_data/VisA/test/test.jsonl"
 
 # Root directory for images (relative paths in JSONL will be resolved relative to this)
 # root = "."
-root = "/home/takisobe@amd.com/zxy/data/MVTec-2K"
+root = "/data/datasets/VisA-2K"
 
 # Output file path for the converted dataset
 # output = "verl_crop_dataset.parquet"
-output = "data/train/train_dataset.parquet"
+output = "data/visa/test/test_dataset.parquet"
 
 # Output format: "parquet" or "jsonl"
 format = "parquet"

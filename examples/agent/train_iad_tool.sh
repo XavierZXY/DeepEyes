@@ -1,25 +1,25 @@
 set -x
 
 PROJECT_NAME="iad-grounding-tool"
-EXPERIMENT_NAME="debug_for_tool"
+EXPERIMENT_NAME="qwen2.5-vl-7b-instruct-ppo-iad-tool"
 WORLD_SIZE=1
-export SAVE_CHECKPOINT_DIR=/home/zxy/codes/working/RL/DeepEyes/data/models
+export SAVE_CHECKPOINT_DIR=/data/models/zxy/verl_checkpoints
 # export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
 
-BASEDIR=/home/zxy/codes/working/RL/DeepEyes/data
-TRAIN_DATA=${BASEDIR}/mini/mini_dataset.parquet
-VALID_DATA=${BASEDIR}/mini/mini_dataset.parquet
+BASEDIR=/home/takisobe/zxy/codes/DeepEyes/data/tool_use
+TRAIN_DATA=${BASEDIR}/train/train_dataset.parquet
+VALID_DATA=/home/takisobe/zxy/codes/DeepEyes/data/visa/test/test_dataset.parquet
 LEARNING_RATE=2.5e-7
-TOTAL_GPU=2
-TRAIN_BATCH_SIZE=4
-PPO_MINI_BATCH_SIZE=2
+TOTAL_GPU=8
+TRAIN_BATCH_SIZE=16
+PPO_MINI_BATCH_SIZE=8
 PPO_MICRO_BATCH_SIZE_PER_GPU=1
 LOG_PROB_MICRO_BATCH_SIZE_PER_GPU=1
-TENSOR_MODEL_PARALLEL_SIZE=2
-GPU_MEMORY_UTILIZATION=0.2
-ROLLOUT_N=8
+TENSOR_MODEL_PARALLEL_SIZE=4
+GPU_MEMORY_UTILIZATION=0.3
+ROLLOUT_N=16
 # REF_MODEL_PATH=/data1/huggingface/hub/models--Qwen--Qwen2.5-VL-3B-Instruct/snapshots/66285546d2b821cf421d4f5eb2576359d3770cd3
-REF_MODEL_PATH=Qwen/Qwen2.5-VL-3B-Instruct
+REF_MODEL_PATH=/data/models/Qwen2.5-VL-3B-Instruct
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     +debug=False \
     +vs_debug=False \

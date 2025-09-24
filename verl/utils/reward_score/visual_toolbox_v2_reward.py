@@ -19,7 +19,7 @@ log = logging.getLogger("rich")
 # Use the same OpenAI client configuration as vl_agent
 openai_api_key = "EMPTY"
 openai_api_base_list = [
-    os.environ.get("LLM_AS_A_JUDGE_BASE", "http://0.0.0.0:9092/v1"),
+    os.environ.get("LLM_AS_A_JUDGE_BASE", "http://gpud4fc:9091/v1"),
 ]
 
 client_list = []
