@@ -28,18 +28,16 @@ def filter_jsonl(input_file, output_file, key, value):
 if __name__ == "__main__":
     # Example usage:
     input_filename = "/data1/huggingface/hub/datasets--XimiaoZhang--MVTec-2K/snapshots/d52ff40b834d44cfcbea1fafc204666fc0da5b18/test_uni.jsonl"
-    input_filename = "data/label/label_1.jsonl"
+    input_filename = "data/VisA/label/0.jsonl"
     filter_key = "clsname"
     filter_value = [
-        "wood",
-        "bottle",
-        "screw",
-        "grid",
-        "transistor",
-        "hazelnut",
-        "capsule",
+        "capsules",
+        "macaroni1",
+        "pcb1",
+        "pipe_fryum",
+        "fryum",
     ]
 
     for cls in filter_value:
-        output_filename = f"data/label/1/{cls}.jsonl"
+        output_filename = f"data/VisA/label/0/{cls}.jsonl"
         filter_jsonl(input_filename, output_filename, filter_key, cls)
