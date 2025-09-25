@@ -1,14 +1,14 @@
 set -x
 
 PROJECT_NAME="iad-grounding-tool"
-EXPERIMENT_NAME="qwen2.5-vl-7b-instruct-ppo-iad-tool"
+EXPERIMENT_NAME="qwen2.5-vl-3b-crop-tool"
 WORLD_SIZE=1
 export SAVE_CHECKPOINT_DIR=/data/models/zxy/verl_checkpoints
 # export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
 
-BASEDIR=/home/takisobe/zxy/codes/DeepEyes/data/tool_use
+BASEDIR=/home/takisobe/zxy/codes/DeepEyes/data/crop
 TRAIN_DATA=${BASEDIR}/train/train_dataset.parquet
-VALID_DATA=/home/takisobe/zxy/codes/DeepEyes/data/visa/test/test_dataset.parquet
+VALID_DATA=${BASEDIR}/test/test_dataset.parquet
 LEARNING_RATE=2.5e-7
 TOTAL_GPU=8
 TRAIN_BATCH_SIZE=16

@@ -91,6 +91,12 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
 
     elif data_source in ["frozenlake"]:
         res = 0.0
+    elif data_source in ["vstar_crop"]:
+        from . import crop_inspection_reward
+
+        res = crop_inspection_reward.compute_crop_inspection_score(
+            solution_str, ground_truth, extra_info
+        )
     elif data_source in ["vstar_visual_toolbox_v2"]:
         from . import visual_toolbox_v2_reward
 

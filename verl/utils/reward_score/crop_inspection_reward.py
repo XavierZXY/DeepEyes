@@ -57,7 +57,7 @@ def _maybe_rescale_pred_boxes_to_original(pred_boxes, extra_info):
 # OpenAI client setup (reuse from vl_agent.py)
 openai_api_key = "EMPTY"
 openai_api_base_list = [
-    os.environ.get("LLM_AS_A_JUDGE_BASE", "http://10.19.178.84:9092/v1"),
+    os.environ.get("LLM_AS_A_JUDGE_BASE", "http://gpud4fc:9091/v1"),
 ]
 
 client_list = []
@@ -608,18 +608,24 @@ def compute_crop_inspection_score(
     # Final score calculation with emphasis on crop tool effectiveness
     final_score = (
         0.4 * acc_reward  # Answer accuracy
-        + 0.3 * tool_usage_reward  # Crop tool usage effectiveness
+        + 8 * tool_usage_reward  # Crop tool usage effectiveness
         + 0.2 * localization_reward  # Localization accuracy
         + 0.2 * type_reward  # Type classification
-        + 0.3 * vision_reward  # Vision tool usage
+        + 5 * vision_reward  # Vision tool usage
         + 0.1 * format_reward  # Format penalty
-        + 0.1 * bbox_format_reward  # Bbox format bonus
+        + 0.5 * bbox_format_reward  # Bbox format bonus
     )
 
     log.info(
         f"Crop inspection score breakdown: acc={acc_reward:.2f}, tool_usage={tool_usage_reward:.2f}, "
         f"loc={localization_reward:.2f}, type={type_reward:.2f}, vision={vision_reward:.2f}, "
         f"format={format_reward:.2f}, bbox_fmt={bbox_format_reward:.2f}, final={final_score:.2f}, "
+        f"crops={len(crop_history)}, quality={crop_quality}"
+    )
+    print(
+        f"Crop inspection score breakdown: acc={0.4 * acc_reward:.2f}, tool_usage={8 * tool_usage_reward:.2f}, "
+        f"loc={0.2 * localization_reward:.2f}, type={0.2 * type_reward:.2f}, vision={5 * vision_reward:.2f}, "
+        f"format={0.1 * format_reward:.2f}, bbox_fmt={0.5 * bbox_format_reward:.2f}, final={final_score:.2f}, "
         f"crops={len(crop_history)}, quality={crop_quality}"
     )
 
