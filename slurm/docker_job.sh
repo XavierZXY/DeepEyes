@@ -21,6 +21,16 @@ DATA_DIR="/home/takisobe@amd.com/zxy"
 DOCKER_IMAGE="388530baa949"
 
 # 清理任何可能存在的同名旧容器
+# 使用正则匹配相同前缀的容器
+existing_containers=$(docker ps --format "{{.Names}}" | grep "^deepeyes")
+if [ -n "$existing_containers" ]; then
+    echo "发现旧容器，正在清理..."
+    for container in $existing_containers; do
+        echo "停止并移除容器: $container"
+        docker stop $container > /dev/null 2>&1 || true
+        docker rm $container > /dev/null 2>&1 || true
+    done
+fi
 docker stop $CONTAINER_NAME > /dev/null 2>&1 || true
 docker rm $CONTAINER_NAME > /dev/null 2>&1 || true
 
@@ -48,8 +58,8 @@ docker run -d --name=$CONTAINER_NAME \
   --security-opt seccomp=unconfined \
   --group-add video \
   -w $DATA_DIR \
-  -p 9091:9091 \
-  -p 9092:9092 \
+  -p 9093:9093 \
+  -p 9093:9093 \
   -t $DOCKER_IMAGE
 
 # 等待容器启动
@@ -78,7 +88,7 @@ docker exec $CONTAINER_NAME bash -c "
   pip install duckduckgo_search gymnasium playwright 'transformers<4.53.0' qwen-vl-utils;
   
   echo '--- 步骤5: 检出 DeepEyes 的目标分支 ---';
-  cd $DATA_DIR/codes/DeepEyes && git checkout train_iad_tools;
+  cd $DATA_DIR/codes/DeepEyes;
 "
 
 # 检查上一步初始化是否成功
