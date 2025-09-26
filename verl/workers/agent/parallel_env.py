@@ -1,5 +1,6 @@
 import re
 import io
+import json
 import torch
 import numpy as np
 from copy import deepcopy
@@ -14,6 +15,39 @@ from verl.utils import hf_tokenizer, hf_processor
 from verl.utils.dataset.vision_utils import process_image, process_raw_image, process_video
 from verl.utils.torch_functional import pad_2d_list_to_length
 from verl.workers.agent.tool_envs import ToolBase
+
+# 创建工具调用专用日志记录器
+def setup_tool_call_logger():
+    """设置工具调用专用的日志记录器"""
+    import logging
+    import datetime
+    import os
+    
+    logger = logging.getLogger('tool_call_tracker')
+    logger.setLevel(logging.INFO)
+    
+    # 避免重复添加handler
+    if not logger.handlers:
+        # 创建日志文件
+        log_dir = "logs"
+        os.makedirs(log_dir, exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_file = os.path.join(log_dir, f"tool_call_tracker_{timestamp}.log")
+        
+        # 创建文件handler
+        file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
+        file_handler.setLevel(logging.INFO)
+        
+        # 创建格式器
+        formatter = logging.Formatter('%(asctime)s | %(message)s', datefmt='%H:%M:%S')
+        file_handler.setFormatter(formatter)
+        
+        logger.addHandler(file_handler)
+    
+    return logger
+
+# 全局日志记录器
+tool_call_logger = setup_tool_call_logger()
 
 def _strip_system_block(text: str) -> str:
     """
@@ -78,12 +112,154 @@ def _merge_multi_modal_inputs(mm_input, other):
     return dict(**output_dict, **other)
 
 
+def _parse_model_output_for_tools(action_text: str, turn_info=""):
+    """
+    Parse model output to extract tool calls, think blocks, and answer blocks.
+    
+    Args:
+        action_text: The model's output text
+        turn_info: Turn information for debugging
+        
+    Returns:
+        dict: Contains 'think', 'tool_calls', 'answer', and 'is_done' fields
+    """
+    result = {
+        'think': None,
+        'tool_calls': [],
+        'answer': None,
+        'is_done': False
+    }
+    
+    # Extract <think> block
+    think_pattern = r'<think>(.*?)</think>'
+    think_match = re.search(think_pattern, action_text, re.DOTALL)
+    if think_match:
+        think_content = think_match.group(1).strip()
+        try:
+            result['think'] = json.loads(think_content)
+            # 统计时添加额外调试信息
+            if "统计" in turn_info and isinstance(result['think'], dict):
+                if 'diagnosis' in result['think']:
+                    diagnosis = result['think']['diagnosis']
+                    if isinstance(diagnosis, dict) and 'label' in diagnosis:
+                        print(f"[STATS PARSING] {turn_info} 解析到退化标签: {diagnosis['label']}")
+        except json.JSONDecodeError as e:
+            if "统计" in turn_info:
+                print(f"[STATS PARSING] {turn_info} JSON解析失败: {e}, 内容: {repr(think_content[:100])}")
+            result['think'] = think_content
+    
+    # Extract <tool_call> block
+    tool_call_pattern = r'<tool_call>(.*?)</tool_call>'
+    tool_call_match = re.search(tool_call_pattern, action_text, re.DOTALL)
+    if tool_call_match:
+        tool_call_content = tool_call_match.group(1).strip()
+        try:
+            tool_calls_json = json.loads(tool_call_content)
+            if isinstance(tool_calls_json, list):
+                result['tool_calls'] = tool_calls_json
+            else:
+                result['tool_calls'] = [tool_calls_json]
+                
+        except json.JSONDecodeError as e:
+            result['tool_calls'] = []
+    
+    # Extract <answer> block
+    answer_pattern = r'<answer>(.*?)</answer>'
+    answer_match = re.search(answer_pattern, action_text, re.DOTALL)
+    if answer_match:
+        result['answer'] = answer_match.group(1).strip()
+        result['is_done'] = True
+    
+    return result
+
+
+def _create_tools_from_parsed_output(parsed_output, multi_modal_data=None, origin_multi_modal_data=None, raw_prompt=None, turn_info=""):
+    """
+    Create tool instances from parsed model output.
+    
+    Args:
+        parsed_output: Output from _parse_model_output_for_tools
+        multi_modal_data: Multi-modal data for tool initialization
+        origin_multi_modal_data: Original multi-modal data
+        raw_prompt: Raw prompt for tool initialization
+        turn_info: Turn information for debugging
+        
+    Returns:
+        list: List of tool instances corresponding to each tool call
+    """
+    tools = []
+    
+    for i, tool_call in enumerate(parsed_output['tool_calls']):
+        # Handle case where tool_call might be a string instead of dict
+        if isinstance(tool_call, str):
+            tools.append(None)
+            continue
+        elif not isinstance(tool_call, dict):
+            tools.append(None)
+            continue
+            
+        tool_name = tool_call.get('name', '')
+        tool_args = tool_call.get('arguments', {})
+        
+        # 调试信息：检查tool_name的类型
+        if "统计" not in turn_info:  # 避免统计时的重复日志
+            print(f"[DEBUG TOOL] tool_call: {tool_call}")
+            print(f"[DEBUG TOOL] tool_name: {tool_name}, 类型: {type(tool_name)}")
+        
+        # 检查tool_name格式错误
+        if not tool_name:
+            print(f"[ERROR TOOL] {turn_info} 工具调用缺少name字段: {tool_call}")
+            tools.append(None)
+            continue
+        elif isinstance(tool_name, dict):
+            print(f"[ERROR TOOL] {turn_info} 格式错误：name字段是字典而不是字符串: {tool_name}")
+            print(f"[ERROR TOOL] {turn_info} 完整tool_call: {tool_call}")
+            print(f"[ERROR TOOL] {turn_info} 这说明模型输出的JSON格式不正确")
+            tools.append(None)
+            continue
+        elif isinstance(tool_name, list):
+            print(f"[ERROR TOOL] {turn_info} 格式错误：name字段是列表而不是字符串: {tool_name}")
+            tools.append(None)
+            continue
+        elif not isinstance(tool_name, str):
+            print(f"[WARNING TOOL] {turn_info} name字段类型错误，强制转换为字符串: {tool_name} ({type(tool_name)}) -> {str(tool_name)}")
+            tool_name = str(tool_name)
+            
+        if tool_name not in ToolBase.registry:
+            tools.append(None)
+            continue
+            
+        try:
+            tool_instance = ToolBase.create(tool_name)
+            try:
+                tool_instance.reset(
+                    raw_prompt=raw_prompt,
+                    multi_modal_data=deepcopy(multi_modal_data) if multi_modal_data else None,
+                    origin_multi_modal_data=deepcopy(origin_multi_modal_data) if origin_multi_modal_data else None,
+                )
+                tools.append(tool_instance)
+            except Exception as reset_error:
+                tools.append(tool_instance)  # 仍然尝试使用未重置的工具
+                
+        except Exception as e:
+            tools.append(None)
+    
+    return tools
+
+
 def _preprocess_multi_modal_inputs(prompt_str, processor, **kwargs):
     if processor is None or "multi_modal_data" not in kwargs:
         return prompt_str, prompt_str, {}
 
-    vllm_input_prompt = prompt_str.replace('<image>', '<|vision_start|><|image_pad|><|vision_end|>')
+    # 计算原始提示中的 <image> 占位符数量
+    image_placeholder_count = prompt_str.count('<image>')
     input_mm_data = kwargs.get("multi_modal_data", {"image": []})
+    actual_image_count = len(input_mm_data["image"])
+    
+    if image_placeholder_count != actual_image_count:
+        print(f"[ERROR MULTIMODAL] ❌ 占位符不匹配: 需要{actual_image_count}个<image>, 实际{image_placeholder_count}个")
+
+    vllm_input_prompt = prompt_str.replace('<image>', '<|vision_start|><|image_pad|><|vision_end|>')
     
     image_info_list = []
     for img in input_mm_data["image"]:
@@ -95,6 +271,7 @@ def _preprocess_multi_modal_inputs(prompt_str, processor, **kwargs):
         image_info_list.append(img_info)
 
     input_mm_data["image"] = [process_image(img) for img in image_info_list]
+    
     model_inputs = processor(text=[vllm_input_prompt], images=input_mm_data["image"], return_tensors="pt")
     input_ids = model_inputs.pop("input_ids")[0]
     attention_mask = model_inputs.pop("attention_mask")[0]
@@ -123,7 +300,6 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
     if custom_stop:
         prev_stop = sampling_params.stop if sampling_params.stop else []
         agent_sampling_params.stop = prev_stop + custom_stop
-        print(f' [DEBUG stop] {type(prev_stop)=}, {type(custom_stop)=}, {type(agent_sampling_params.stop)=}')
 
     # Refer to: https://github.com/vllm-project/vllm/issues/1728
     # and https://github.com/vllm-project/vllm/issues/15976
@@ -157,6 +333,18 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
     active_mask = []
     mm_input_list = []
     tool_call_cnt_list = []
+    
+    # 新增统计信息
+    final_answer_list = []  # 是否以answer结束
+    degradation_labels_list = []  # 退化类型列表
+    repeated_degradation_cnt_list = []  # 连续重复退化数量
+    
+    # 每种退化类型的连续出现统计
+    all_degradation_types = ["rain", "haze", "dark", "motion blur", "defocus blur", "noise", "low resolution", "jpeg compression artifact", "clean"]
+    consecutive_degradation_stats = {}
+    last_round_degradations = []  # 跟踪每个样本上一轮的退化类型
+    for deg_type in all_degradation_types:
+        consecutive_degradation_stats[deg_type] = []  # 每个样本的连续次数
 
     env = ParallelEnv(config.agent, tokenizer, processor)
     env.reset(prompts, vllm_inputs, n=sampling_params.n)
@@ -175,12 +363,24 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
             active_mask.append(True)
             mm_input_list.append(deepcopy(multi_modal_inputs[i]))
             tool_call_cnt_list.append(0)
+            
+            # 初始化新增统计信息
+            final_answer_list.append(False)
+            degradation_labels_list.append([])  # 存储每轮的退化标签
+            repeated_degradation_cnt_list.append(0)
+            
+            # 初始化每种退化类型的连续统计
+            for deg_type in all_degradation_types:
+                consecutive_degradation_stats[deg_type].append(0)
+            last_round_degradations.append(set())  # 初始化为空集合
 
     pg = vllm_ps.get_tp_group()
     max_total_length = config.prompt_length + config.response_length
     for step in range(config.agent.max_turns):
-        print(f' [DEBUG 000] {step=}, total={batch_size}, n={sampling_params.n}, num_active={sum(active_mask)}')
+        print(f'[DEBUG step {step + 1}] 🔄 活跃: {sum(active_mask)}/{batch_size * sampling_params.n}')
+        
         if sum(active_mask) == 0:
+            print(f'[DEBUG step {step + 1}] 结束: 无活跃对话')
             break
 
         active_indices = [idx for idx, is_active in enumerate(active_mask) if is_active]
@@ -190,9 +390,25 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
             sampling_params=agent_sampling_params,
             use_tqdm=False
         )
-
+        
+        # 模型输出解析检查
+        for idx, a in enumerate(actions):
+            action_text = a.outputs[0].text
+            active_idx = active_indices[idx]
+            
+            has_think = '<think>' in action_text and '</think>' in action_text
+            has_tool_call = '<tool_call>' in action_text and '</tool_call>' in action_text
+            has_answer = '<answer>' in action_text and '</answer>' in action_text
+            
+            format_tags = []
+            if has_think: format_tags.append("think")
+            if has_tool_call: format_tags.append("tool_call")
+            if has_answer: format_tags.append("answer")
+            
+            # print(f'[DEBUG step {step + 1}-{active_idx:02d}] 解析: {"|".join(format_tags) if format_tags else "无有效标签"}')
+            # print(f'[DEBUG step {step + 1}-{active_idx:02d}] 解析: {"|".join(format_tags) if format_tags else "无有效标签"}')
         if pg.is_first_rank:
-            obs_results = env.step(active_indices, actions)
+            obs_results = env.step(active_indices, actions, current_turn=step + 1)
         else:
             obs_results = None
 
@@ -201,6 +417,117 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
 
 
         for idx, obs, act, rew, done in zip(active_indices, observations, actions, rewards, dones):
+            # 收集统计信息 - 解析当前动作
+            action_text = act.outputs[0].text
+            parsed_action = _parse_model_output_for_tools(action_text, f"统计-轮次{step + 1}")
+            
+            # 统计是否以answer结束
+            if parsed_action.get('is_done', False):
+                final_answer_list[idx] = True
+                print(f"[STATS] 样本{idx} 以answer结束")
+            
+            # 统计退化类型
+            think_data = parsed_action.get('think')
+            print(f"[STATS] 样本{idx} 轮次{step + 1} 思考数据: {think_data}, 类型: {type(think_data)}")
+            
+            current_labels = []
+            # 确保think_data是字典且包含diagnosis
+            if isinstance(think_data, dict) and 'diagnosis' in think_data:
+                diagnosis = think_data['diagnosis']
+                print(f"[STATS] 样本{idx} diagnosis数据: {diagnosis}, 类型: {type(diagnosis)}")
+                
+                if isinstance(diagnosis, dict) and 'label' in diagnosis:
+                    # 处理单个标签，转换为列表格式以保持一致性
+                    label = diagnosis.get('label', '')
+                    current_labels = [label] if label else []
+                    print(f"[STATS] 样本{idx} 提取到的标签: {current_labels}")
+                elif isinstance(diagnosis, dict) and 'labels' in diagnosis:
+                    # 兼容多标签格式，安全处理嵌套列表
+                    raw_labels = diagnosis.get('labels', [])
+                    current_labels = []
+                    
+                    # 处理可能的嵌套列表
+                    if isinstance(raw_labels, list):
+                        for item in raw_labels:
+                            if isinstance(item, str):
+                                current_labels.append(item)
+                            elif isinstance(item, list):
+                                # 展平嵌套列表
+                                current_labels.extend([str(x) for x in item])
+                            else:
+                                current_labels.append(str(item))
+                    else:
+                        current_labels = [str(raw_labels)]
+                    
+                    print(f"[STATS] 样本{idx} 提取到的标签: {current_labels}")
+                else:
+                    print(f"[STATS] 样本{idx} diagnosis格式错误或缺少label/labels字段")
+            else:
+                print(f"[STATS] 样本{idx} think数据不是字典或缺少diagnosis字段")
+            
+            # 安全地创建标签集合，处理可能的非哈希类型
+            try:
+                # 确保所有元素都是可哈希的
+                hashable_labels = []
+                for label in current_labels:
+                    if isinstance(label, (str, int, float)):
+                        hashable_labels.append(str(label))
+                    elif isinstance(label, list):
+                        # 如果是列表，转换为字符串
+                        hashable_labels.append(str(label))
+                    else:
+                        hashable_labels.append(str(label))
+                
+                current_labels_set = set(hashable_labels)
+                current_labels = hashable_labels  # 更新为可哈希的版本
+                print(f"[STATS] 样本{idx} 处理后的标签: {current_labels}")
+            except TypeError as e:
+                print(f"[STATS ERROR] 样本{idx} 无法创建标签集合: {e}, 原始标签: {current_labels}")
+                current_labels_set = set()
+                current_labels = []
+            
+            if current_labels:
+                degradation_labels_list[idx].extend(current_labels)
+                
+                # 计算每种退化类型的连续出现次数
+                prev_labels_set = last_round_degradations[idx]
+                
+                for deg_type in all_degradation_types:
+                    if deg_type in current_labels_set:
+                        if deg_type in prev_labels_set:
+                            # 连续出现，增加计数
+                            consecutive_degradation_stats[deg_type][idx] += 1
+                        else:
+                            # 新出现，重置为1
+                            consecutive_degradation_stats[deg_type][idx] = 1
+                    else:
+                        # 未出现，重置为0
+                        consecutive_degradation_stats[deg_type][idx] = 0
+                
+                # 更新上一轮的退化类型记录
+                last_round_degradations[idx] = current_labels_set
+                
+                # 检查总体重复退化（任意类型重复）
+                overlap = prev_labels_set & current_labels_set
+                if overlap and step > 0:
+                    repeated_degradation_cnt_list[idx] += len(overlap)
+                    print(f"[STATS] 样本{idx} 重复退化: {overlap}")
+                
+                print(f"[STATS] 样本{idx} 轮次{step + 1} 退化类型: {current_labels}")
+                
+                # 打印连续统计
+                consecutive_info = []
+                for deg_type in all_degradation_types:
+                    if consecutive_degradation_stats[deg_type][idx] > 1:
+                        consecutive_info.append(f"{deg_type}:{consecutive_degradation_stats[deg_type][idx]}")
+                if consecutive_info:
+                    print(f"[STATS] 样本{idx} 连续退化: {', '.join(consecutive_info)}")
+            else:
+                # 当前轮没有退化标签，重置所有连续计数
+                for deg_type in all_degradation_types:
+                    consecutive_degradation_stats[deg_type][idx] = 0
+                last_round_degradations[idx] = set()
+            
             # process response token ids
             response_token_ids = torch.tensor(act.outputs[0].token_ids, dtype=torch.int64, device=running_states[idx].device)
             running_states[idx] = torch.cat([running_states[idx], response_token_ids])
@@ -232,6 +559,7 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
             if 'prompt_token_ids_vllm' in obs.keys() and 'prompt_token_ids_model' in obs.keys():
                 obs_token_ids_vllm = obs['prompt_token_ids_vllm']
                 obs_token_ids_model = obs['prompt_token_ids_model'].to(running_states[idx].device)
+                
 
                 if len(vllm_input_list[idx]['prompt_token_ids']) + len(obs_token_ids_vllm) >= max_total_length:
                     active_mask[idx] = False
@@ -259,6 +587,7 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
                 if 'image' in mm_data.keys():
                     if 'multi_modal_data' not in vllm_input_list[idx].keys():
                         vllm_input_list[idx]['multi_modal_data'] = {"image": []}
+                    
                     vllm_input_list[idx]['multi_modal_data']['image'] += mm_data['image']
 
                 mm_input = obs.get('multi_modal_inputs', {})
@@ -300,6 +629,48 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
     reward_tensor = pad_2d_list_to_length(reward_tensor_list, 0.0, max_total_length).to(target_device)
 
     tool_call_tensor = torch.tensor(tool_call_cnt_list, dtype=torch.float32).to(target_device).unsqueeze(1)
+    
+    # 处理新增统计信息
+    final_answer_tensor = torch.tensor([1.0 if x else 0.0 for x in final_answer_list], dtype=torch.float32).to(target_device).unsqueeze(1)
+    
+    # 统计退化类型出现次数
+    degradation_stats = {}
+    for deg_type in all_degradation_types:
+        # 总出现次数统计
+        count_list = []
+        for labels in degradation_labels_list:
+            count_list.append(float(labels.count(deg_type)))
+        degradation_stats[f"degradation_{deg_type.replace(' ', '_')}_total"] = torch.tensor(count_list, dtype=torch.float32).to(target_device).unsqueeze(1)
+        
+        # 连续出现次数统计
+        consecutive_list = consecutive_degradation_stats[deg_type]
+        degradation_stats[f"degradation_{deg_type.replace(' ', '_')}_consecutive"] = torch.tensor(consecutive_list, dtype=torch.float32).to(target_device).unsqueeze(1)
+    
+    repeated_degradation_tensor = torch.tensor(repeated_degradation_cnt_list, dtype=torch.float32).to(target_device).unsqueeze(1)
+    
+    # 打印详细统计摘要
+    print(f"\n[STATS SUMMARY] === 退化类型统计详情 ===")
+    print(f"[STATS SUMMARY] 以answer结束的样本: {sum(final_answer_list)}/{len(final_answer_list)}")
+    print(f"[STATS SUMMARY] 连续重复退化平均次数: {sum(repeated_degradation_cnt_list)/len(repeated_degradation_cnt_list):.2f}")
+    
+    print(f"[STATS SUMMARY] 原始数据检查:")
+    print(f"[STATS SUMMARY]   degradation_labels_list长度: {len(degradation_labels_list)}")
+    for i, labels in enumerate(degradation_labels_list[:3]):  # 只显示前3个样本
+        print(f"[STATS SUMMARY]   样本{i}的标签: {labels}")
+    
+    print(f"[STATS SUMMARY] 退化类型出现统计:")
+    for deg_type in all_degradation_types:
+        total_count = sum([labels.count(deg_type) for labels in degradation_labels_list])
+        if total_count > 0:
+            print(f"[STATS SUMMARY]   {deg_type}: {total_count} 次")
+            
+    print(f"[STATS SUMMARY] 传递给WandB的tensor形状:")
+    for key, tensor in degradation_stats.items():
+        if 'total' in key:
+            print(f"[STATS SUMMARY]   {key}: shape={tensor.shape}, sum={torch.sum(tensor).item():.1f}")
+    
+    print(f"[STATS SUMMARY] === 统计详情结束 ===\n")
+    
     return DataProto.from_dict(
         tensors={
             "response": state_tensor[:, -config.response_length: ],
@@ -308,6 +679,9 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
             "position_ids": position_ids_tensor,
             "env_reward": reward_tensor[:, -config.response_length: ],
             "tool_cnt": tool_call_tensor,
+            "final_answer": final_answer_tensor,
+            "repeated_degradation_cnt": repeated_degradation_tensor,
+            **degradation_stats,
         },
         non_tensors={"multi_modal_inputs": mm_input_list} if processor is not None else None
     )
@@ -315,29 +689,100 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
 
 def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None):
     action_string = sample.get('action', '')
-    tool = sample.get('tool', None)
+    tools = sample.get('tools', [])
+    parsed_output = sample.get('parsed_output', {})
+    turn_info = sample.get('turn_info', '')
+    # print(f'[DEBUG {turn_info}] ', action_string)
+    # print(f'[DEBUG {turn_info}] ', tools)
+    # print(f'[DEBUG {turn_info}] ', parsed_output)
 
-    # non-agent data
-    if action_string == '' or tool is None:
+    # 工具执行开始
+    valid_tools = [t for t in tools if t is not None]
+
+    # non-agent data or no tools to execute
+    if action_string == '':
         return {}, 0.0, True, {}
+    elif not tools:
+        # If tools is empty but action_string is not, it means parsing failed
+        error_msg = "Failed to parse valid tool calls from the action string. Please check the format of your <tool_call> blocks."
+        error_text = f"\n<|im_start|>user\nError: {error_msg}<|im_end|>\n<|im_start|>assistant\n"
+        
+        # Encode error message in the expected format
+        obs_token_ids = tokenizer.encode(error_text, add_special_tokens=False)
+        error_obs = {
+            "prompt_token_ids_vllm": torch.tensor(obs_token_ids),
+            "prompt_token_ids_model": torch.tensor(obs_token_ids),
+        }
+        return error_obs, -0.1, False, {"error": error_msg, "status": "failed"}
 
-    tool_result, reward, done, info = tool.execute(action_string)
+    # Handle <answer> case - episode is done
+    if parsed_output.get('is_done', False):
+        return {}, 0.0, True, {"status": "success", "type": "answer"}  # Episode done, no reward here
 
-    # post-process
-    if not tool_result:
+    # Execute tools sequentially
+    final_tool_result = None
+    total_reward = 0.0
+    final_done = False
+    final_info = {}
+
+    # 逐个执行工具
+    executed_count = 0
+    for i, tool in enumerate(tools):
+        if tool is None:
+            continue
+            
+        try:
+            tool_call = parsed_output['tool_calls'][i] if i < len(parsed_output['tool_calls']) else {}
+            
+            if isinstance(tool_call, dict):
+                compatible_action_string = f"<tool_call>{json.dumps(tool_call)}</tool_call>"
+            else:
+                compatible_action_string = f"<tool_call>{json.dumps({'name': str(tool_call), 'arguments': {}})}</tool_call>"
+            # print(f'[DEBUG {turn_info}] ', compatible_action_string)
+            print(f'[DEBUG {turn_info}] 执行工具: {tool.name}')
+            tool_result, reward, done, info = tool.execute(compatible_action_string)
+            print(f'[DEBUG {turn_info}] 结果: multi_modal_data={tool_result.get("multi_modal_data") is not None}, reward={reward:.3f}, done={done}')
+            print(f'[DEBUG {turn_info}] 状态: {info.get("status", "unknown")}')
+            executed_count += 1
+            
+            # 累积结果
+            final_tool_result = tool_result
+            total_reward += reward
+            final_done = final_done or done
+            final_info.update(info)
+            
+        except Exception as e:
+            total_reward -= 0.1
+            continue
+
+    # If no tools were executed successfully, return error message to model
+    if final_tool_result is None:
+        error_msg = "The tool executions failed. Please check your tool call format and arguments."
+        error_text = f"\n<|im_start|>user\nError: {error_msg}<|im_end|>\n<|im_start|>assistant\n"
+        
+        # Encode error message in the expected format
+        obs_token_ids = tokenizer.encode(error_text, add_special_tokens=False)
+        error_obs = {
+            "prompt_token_ids_vllm": torch.tensor(obs_token_ids),
+            "prompt_token_ids_model": torch.tensor(obs_token_ids),
+        }
+        return error_obs, total_reward, False, {"error": error_msg, "status": "failed"}
+
+    # post-process the final tool result
+    if not final_tool_result:
         tool_result_info = {}
 
-    elif isinstance(tool_result, str):
+    elif isinstance(final_tool_result, str):
         # Format 1: text output
-        obs_token_ids = tokenizer.encode(tool_result, add_special_tokens=False)
+        obs_token_ids = tokenizer.encode(final_tool_result, add_special_tokens=False)
         tool_result_info = {
             "prompt_token_ids_vllm": torch.tensor(obs_token_ids),
             "prompt_token_ids_model": torch.tensor(obs_token_ids),
         }
 
-    elif isinstance(tool_result, list) and isinstance(tool_result[0], dict):
+    elif isinstance(final_tool_result, list) and isinstance(final_tool_result[0], dict):
         # Format 2: [{"role": "...", "content": "..."}, ...]
-        obs_token_ids = tokenizer.apply_chat_template(tool_result, add_generation_prompt=True, return_tensors='pt')[0]
+        obs_token_ids = tokenizer.apply_chat_template(final_tool_result, add_generation_prompt=True, return_tensors='pt')[0]
 
         # NOTE: skip the sp (and the \n token that comes after it) added by Qwen tokenizer
         eos_start_idx = torch.nonzero(obs_token_ids == tokenizer.eos_token_id)
@@ -345,17 +790,17 @@ def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None):
             eos_start_idx = eos_start_idx[0].item()
             obs_token_ids = obs_token_ids[eos_start_idx + 1 : ]
         else:
-            raise ValueError(f"tool [{tool.name}] returned type List[str] output must be in openai/qwen format : {tool_result}")
+            raise ValueError(f"tool returned type List[str] output must be in openai/qwen format : {final_tool_result}")
 
         tool_result_info = {
             "prompt_token_ids_vllm": obs_token_ids,
             "prompt_token_ids_model": obs_token_ids,
         }
 
-    elif isinstance(tool_result, dict):
+    elif isinstance(final_tool_result, dict):
         # Format 3: {"prompt": "...", "chat": [{"role": "...", "content": "..."}, ...], "multi_modal_data": ...}
-        prompt_str = tool_result.pop("prompt", "")
-        chat_list = tool_result.pop("chat", [])
+        prompt_str = final_tool_result.pop("prompt", "")
+        chat_list = final_tool_result.pop("chat", [])
 
         if len(prompt_str) == 0 and len(chat_list) == 0:
             raise ValueError("Both prompt_str and chat_list are invalid")
@@ -363,22 +808,22 @@ def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None):
             prompt_str = tokenizer.apply_chat_template(chat_list, add_generation_prompt=True, tokenize=False)
             prompt_str = _strip_system_block(prompt_str)
 
-        prompt_str_vllm, obs_token_ids_model, mm_inputs = _preprocess_multi_modal_inputs(prompt_str, processor, **tool_result)
+        prompt_str_vllm, obs_token_ids_model, mm_inputs = _preprocess_multi_modal_inputs(prompt_str, processor, **final_tool_result)
         obs_token_ids_vllm = tokenizer.encode(prompt_str_vllm, add_special_tokens=False, return_tensors='pt')[0]
         tool_result_info = {
             "prompt_token_ids_vllm": obs_token_ids_vllm,
             "prompt_token_ids_model": obs_token_ids_model,
-            **tool_result   # multi_modal_data
+            **final_tool_result   # multi_modal_data
         }
         if mm_inputs:
             tool_result_info["multi_modal_inputs"] = mm_inputs
 
     else:
-        raise ValueError(f"Invalid tool_result type: {type(tool_result)=} -- {tool_result}")
+        raise ValueError(f"Invalid tool_result type: {type(final_tool_result)=} -- {final_tool_result}")
 
     if pbar is not None:
         pbar.update(1)
-    return tool_result_info, reward, done, info
+    return tool_result_info, total_reward, final_done, final_info
 
 
 class ParallelEnv:
@@ -393,10 +838,11 @@ class ParallelEnv:
         # type: List[ Dict[ Str, ToolBase subclasses ] ]
         self.tools = []
 
-    def step(self, active_indices, actions):
+    def step(self, active_indices, actions, current_turn=1):
         """
         Input:
         - actions: vllm.RequestOutput
+        - current_turn: Current turn number for debugging
 
         Output:
         - observations: List[Dict], content like {"prompt_token_ids": ..., "multi_modal_data": ...}, 
@@ -431,22 +877,89 @@ class ParallelEnv:
             valid_indices.append(idx)
             valid_actions.append(act.outputs[0].text)
 
+        # 工具解析和创建
         agent_inputs = []
+        
         for i, idx, action in zip(real_indices, valid_indices, valid_actions):
+            turn_info = f"T{current_turn}-样本{idx}"
+            
+            # 解析模型输出
+            parsed_output = _parse_model_output_for_tools(action, turn_info)
+            
+            tool_calls_count = len(parsed_output.get('tool_calls', []))
+            has_answer = parsed_output.get('is_done', False)
+            has_think = parsed_output.get('think') is not None
+            print(f'[DEBUG step {current_turn}-{idx:02d}] 工具解析: {parsed_output.get("tool_calls", [])}')
+           
+            print(f'[DEBUG step {current_turn}-{idx:02d}] 思考: {parsed_output.get("think", None)}')
+            # 创建工具实例
+            tools = []
+            if parsed_output['tool_calls']:
+                # 获取最新的图像数据（历史列表的最后一个元素）
+                current_multi_modal_data = (
+                    self.multi_modal_data_history_list[idx][-1] 
+                    if self.multi_modal_data_history_list[idx] 
+                    else None
+                )
+                tools = _create_tools_from_parsed_output(
+                    parsed_output,
+                    multi_modal_data=current_multi_modal_data,
+                    origin_multi_modal_data=self.origin_multi_modal_data_list[idx],
+                    raw_prompt=self.raw_prompts[idx],
+                    turn_info=turn_info
+                )
+                
+                # 输出工具创建结果
+                tool_names = []
+                for j, tool_call in enumerate(parsed_output['tool_calls']):
+                    if isinstance(tool_call, dict):
+                        tool_names.append(tool_call.get('name', 'unknown'))
+                    else:
+                        tool_names.append('格式错误')
+                
+                success_count = sum(1 for t in tools if t is not None)
+                # print(f'[DEBUG step {current_turn}-{idx:02d}] 工具: {success_count}/{len(tools)}个成功 [{", ".join(tool_names)}]')
+                
+            # elif has_answer:
+            #     print(f'[DEBUG step {current_turn}-{idx:02d}] 答案: 任务完成')
+            # else:
+            #     print(f'[DEBUG step {current_turn}-{idx:02d}] 错误: 无有效工具调用或答案')
+            
             agent_inputs.append(dict(
                 idx=i,
                 valid_idx=idx,
                 action=action,
-                tool=self.tools[idx],
+                tools=tools,
+                parsed_output=parsed_output,
+                turn_info=turn_info,
             ))
 
-        # 2. executing actions (sync or async)
+        # 工具执行
         num_workers = min(self.config.concurrent_workers, len(valid_actions))
         pbar = tqdm(total=len(valid_actions), desc=f'Tool calling on {num_workers} workers') if self.config.show_tqdm else None
+        
         if num_workers <= 1:
             for agi in agent_inputs:
+                valid_idx = agi['valid_idx']
                 subidx = agi['idx']
+                
                 obs, reward, done, info = execute_tool_call(agi, self.tokenizer, self.processor, pbar=pbar)
+                
+                # 输出执行结果
+                if info.get('status') == 'success':
+                    if info.get('type') == 'answer':
+                        status = "🏁"  # 答案完成
+                    else:
+                        status = "✅"  # 工具执行成功
+                        # 更新环境中的图像数据
+                        if isinstance(obs, dict) and 'multi_modal_data' in obs:
+                            self.multi_modal_data_history_list[valid_idx].append(deepcopy(obs['multi_modal_data']))
+                            history_len = len(self.multi_modal_data_history_list[valid_idx])
+                            print(f'[DEBUG step {current_turn}-{valid_idx:02d}] 图像历史更新: 第{history_len}轮, {len(obs["multi_modal_data"].get("image", []))}张图片')
+                else:
+                    status = "❌"  # 执行失败
+                # print(f'[DEBUG step {current_turn}-{valid_idx:02d}] 执行: {status} reward={reward:.3f}, done={done}')
+                
                 obs_list[subidx] = obs
                 reward_list[subidx] = reward
                 done_list[subidx] |= done
@@ -456,6 +969,23 @@ class ParallelEnv:
                 raw_outputs = list(executor.map(partial_tool_func, agent_inputs))
             for agi, raw in zip(agent_inputs, raw_outputs):
                 obs, reward, done = raw[0], raw[1], raw[2]
+                info = raw[3] if len(raw) > 3 else {}
+                
+                valid_idx = agi['valid_idx']
+                if info.get('status') == 'success':
+                    if info.get('type') == 'answer':
+                        status = "🏁"  # 答案完成
+                    else:
+                        status = "✅"  # 工具执行成功
+                        # 更新环境中的图像数据
+                        if isinstance(obs, dict) and 'multi_modal_data' in obs:
+                            self.multi_modal_data_history_list[valid_idx].append(deepcopy(obs['multi_modal_data']))
+                            history_len = len(self.multi_modal_data_history_list[valid_idx])
+                            print(f'[DEBUG step {current_turn}-{valid_idx:02d}] 图像历史更新: 第{history_len}轮, {len(obs["multi_modal_data"].get("image", []))}张图片')
+                else:
+                    status = "❌"  # 执行失败
+                print(f'[DEBUG step {current_turn}-{valid_idx:02d}] 执行: {status} reward={reward:.3f}, done={done}')
+                
                 subidx = agi['idx']
                 obs_list[subidx] = obs
                 reward_list[subidx] = reward
@@ -465,38 +995,78 @@ class ParallelEnv:
 
     def reset(self, prompts, vllm_inputs, n=1, **kwargs):
         self.tools = []
+        self.raw_prompts = []
+        self.multi_modal_data_history_list = []  # 每个样本的图像历史：List[List[Dict]]
+        self.origin_multi_modal_data_list = []
         reset_output_list = []
         assert len(prompts) == len(vllm_inputs), f"{len(prompts)=}, {len(vllm_inputs)=}"
 
         num_agent, num_non_agent = 0, 0
         for i in range(len(prompts)):
             data_item = prompts[i]  # DataProtoItem
+            # We no longer use tool_name from dataset, but still extract other data
             tool_name = data_item.non_tensor_batch.pop(self.config.tool_name_key, '')
             raw_prompt = data_item.non_tensor_batch.pop('raw_prompt', None)
-
+          
             vllm_input_item = vllm_inputs[i]   # {"prompt_token_ids": ..., "multi_modal_data": ...}
             multi_modal_data = vllm_input_item.get("multi_modal_data", None)
             origin_multi_modal_data = data_item.non_tensor_batch.pop("origin_multi_modal_data", None)
+            
             for _ in range(n):
-                if tool_name:
-                    # init tools from config field `tool_name_key`
-                    tool_fns = ToolBase.create(tool_name)
-                    reset_output = tool_fns.reset(
-                        raw_prompt=raw_prompt, 
-                        multi_modal_data=deepcopy(multi_modal_data),
-                        origin_multi_modal_data=deepcopy(origin_multi_modal_data),
-                    )
-                    self.tools.append(tool_fns)
-                    reset_output_list.append(reset_output)
+                # Store context data for later tool creation
+                self.raw_prompts.append(raw_prompt)
+                # 初始化图像历史，第一个元素是原始图像
+                image_history = [deepcopy(multi_modal_data)] if multi_modal_data else []
+                self.multi_modal_data_history_list.append(image_history)
+                self.origin_multi_modal_data_list.append(deepcopy(origin_multi_modal_data))
+                
+                # Initialize with None - tools will be created dynamically from model output
+                self.tools.append(None)
+                reset_output_list.append(None)
+                
+                # Count as agent data if we have a raw prompt (indicating this could be an agent task)
+                if raw_prompt is not None:
                     num_agent += 1
                 else:
-                    # non-agent data
-                    self.tools.append(None)
-                    reset_output_list.append(None)
                     num_non_agent += 1
         
-        print(f' [DEBUG agent] {num_agent=}, {num_non_agent=}')
         return reset_output_list
+
+    def get_image_history_length(self, idx: int) -> int:
+        """获取指定样本的图像历史长度"""
+        return len(self.multi_modal_data_history_list[idx]) if idx < len(self.multi_modal_data_history_list) else 0
+    
+    def get_current_image(self, idx: int):
+        """获取指定样本的当前（最新）图像"""
+        if idx < len(self.multi_modal_data_history_list) and self.multi_modal_data_history_list[idx]:
+            return self.multi_modal_data_history_list[idx][-1]
+        return None
+    
+    def get_image_at_step(self, idx: int, step: int):
+        """获取指定样本在指定步骤的图像"""
+        if (idx < len(self.multi_modal_data_history_list) and 
+            0 <= step < len(self.multi_modal_data_history_list[idx])):
+            return self.multi_modal_data_history_list[idx][step]
+        return None
+    
+    def rollback_to_step(self, idx: int, step: int) -> bool:
+        """回退到指定步骤（预留接口，未来实现）"""
+        if (idx < len(self.multi_modal_data_history_list) and 
+            0 <= step < len(self.multi_modal_data_history_list[idx])):
+            # 截断历史到指定步骤
+            self.multi_modal_data_history_list[idx] = self.multi_modal_data_history_list[idx][:step+1]
+            print(f'[ROLLBACK] 样本{idx} 回退到第{step+1}轮')
+            return True
+        return False
+    
+    def get_all_images(self, idx: int):
+        """获取指定样本的所有图像历史"""
+        if idx < len(self.multi_modal_data_history_list):
+            return self.multi_modal_data_history_list[idx].copy()
+        return []
 
     def close(self):
         self.tools = []
+        self.raw_prompts = []
+        self.multi_modal_data_history_list = []
+        self.origin_multi_modal_data_list = []

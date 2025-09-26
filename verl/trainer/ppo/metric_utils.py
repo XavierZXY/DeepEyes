@@ -171,15 +171,75 @@ def compute_throughout_metrics(batch: DataProto, timing_raw: Dict[str, float], n
 
 
 def compute_agent_metrics(batch: DataProto):
-    if 'tool_cnt' not in batch.batch.keys():
-        return {}
-
-    tool_cnt_tensor = batch.batch.pop('tool_cnt').detach().cpu()
-    return {
-        "agent/tool_call_mean": torch.mean(tool_cnt_tensor).item(),
-        "agent/tool_call_max": torch.max(tool_cnt_tensor).item(),
-        "agent/tool_call_min": torch.min(tool_cnt_tensor).item(),
-    }
+    metrics = {}
+    
+    print(f"[METRICS DEBUG] 开始计算agent指标，batch.batch.keys(): {list(batch.batch.keys())}")
+    
+    # 原有的工具调用统计
+    if 'tool_cnt' in batch.batch.keys():
+        tool_cnt_tensor = batch.batch.pop('tool_cnt').detach().cpu()
+        metrics.update({
+            "agent/tool_call_mean": torch.mean(tool_cnt_tensor).item(),
+            "agent/tool_call_max": torch.max(tool_cnt_tensor).item(),
+            "agent/tool_call_min": torch.min(tool_cnt_tensor).item(),
+        })
+        print(f"[METRICS DEBUG] 工具调用统计: mean={torch.mean(tool_cnt_tensor).item():.2f}")
+    
+    # 新增：是否以answer结束的统计
+    if 'final_answer' in batch.batch.keys():
+        final_answer_tensor = batch.batch.pop('final_answer').detach().cpu()
+        answer_rate = torch.mean(final_answer_tensor).item()
+        metrics.update({
+            "agent/final_answer_rate": answer_rate,
+            "agent/final_answer_count": torch.sum(final_answer_tensor).item(),
+        })
+    
+    # 新增：连续重复退化统计
+    if 'repeated_degradation_cnt' in batch.batch.keys():
+        repeated_deg_tensor = batch.batch.pop('repeated_degradation_cnt').detach().cpu()
+        metrics.update({
+            "agent/repeated_degradation_mean": torch.mean(repeated_deg_tensor).item(),
+            "agent/repeated_degradation_max": torch.max(repeated_deg_tensor).item(),
+        })
+    
+    # 新增：各种退化类型统计
+    degradation_types = ["rain", "haze", "dark", "motion_blur", "defocus_blur", "noise", "low_resolution", "jpeg_compression_artifact", "clean"]
+    for deg_type in degradation_types:
+        # 总出现次数统计
+        total_key = f"degradation_{deg_type}_total"
+        if total_key in batch.batch.keys():
+            deg_tensor = batch.batch.pop(total_key).detach().cpu()
+            total_count = torch.sum(deg_tensor).item()
+            mean_count = torch.mean(deg_tensor).item()
+            metrics.update({
+                f"agent/degradation_{deg_type}_total": total_count,
+                f"agent/degradation_{deg_type}_mean": mean_count,
+            })
+            if total_count > 0:
+                print(f"[METRICS DEBUG] {deg_type}: total={total_count:.1f}, mean={mean_count:.3f}")
+        else:
+            print(f"[METRICS DEBUG] 缺少键: {total_key}")
+        
+        # 连续出现次数统计
+        consecutive_key = f"degradation_{deg_type}_consecutive"
+        if consecutive_key in batch.batch.keys():
+            consecutive_tensor = batch.batch.pop(consecutive_key).detach().cpu()
+            max_consecutive = torch.max(consecutive_tensor).item()
+            mean_consecutive = torch.mean(consecutive_tensor).item()
+            # 只统计大于0的连续次数
+            non_zero_consecutive = consecutive_tensor[consecutive_tensor > 0]
+            if len(non_zero_consecutive) > 0:
+                avg_non_zero_consecutive = torch.mean(non_zero_consecutive).item()
+            else:
+                avg_non_zero_consecutive = 0.0
+                
+            metrics.update({
+                f"agent/degradation_{deg_type}_consecutive_max": max_consecutive,
+                f"agent/degradation_{deg_type}_consecutive_mean": mean_consecutive,
+                f"agent/degradation_{deg_type}_consecutive_avg_nonzero": avg_non_zero_consecutive,
+            })
+    
+    return metrics
 
 
 def bootstrap_metric(

@@ -119,8 +119,9 @@ class VisualToolBoxV2(ToolBase):
 
     def reset(self, raw_prompt, multi_modal_data, origin_multi_modal_data, **kwargs):
         self.chatml_history = raw_prompt
-        self.multi_modal_data = origin_multi_modal_data
-        assert 'image' in self.multi_modal_data.keys(), f'[ERROR] {origin_multi_modal_data=}'
+        # 使用当前处理后的图片，而不是原始图片
+        self.multi_modal_data = multi_modal_data if multi_modal_data else origin_multi_modal_data
+        assert 'image' in self.multi_modal_data.keys(), f'[ERROR] {self.multi_modal_data=}'
         assert len(self.multi_modal_data['image']) > 0, f'[ERROR] {self.multi_modal_data["image"]=}'
         
         self.height = self.multi_modal_data['image'][0].height

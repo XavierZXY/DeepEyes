@@ -513,6 +513,10 @@ class RayPPOTrainer:
         )
 
         assert len(self.train_dataloader) >= 1
+        
+        print(f"[VAL DEBUG] 验证数据加载器长度: {len(self.val_dataloader)}")
+        print(f"[VAL DEBUG] 训练数据加载器长度: {len(self.train_dataloader)}")
+        
         assert len(self.val_dataloader) == 1, (
             "Validation dataloader must have a single batch,"
             + " which inference engines will schedule the memory themselves."
@@ -559,6 +563,9 @@ class RayPPOTrainer:
         self.validation_generations_logger.log(self.config.trainer.logger, samples, self.global_steps)
 
     def _validate(self):
+        print(f"[VAL DEBUG] 开始验证函数 _validate()")
+        print(f"[VAL DEBUG] val_reward_fn类型: {type(self.val_reward_fn)}")
+        
         data_source_lst = []
         reward_extra_infos_dict: dict[str, list] = defaultdict(list)
 
@@ -567,8 +574,13 @@ class RayPPOTrainer:
         sample_outputs = []
         sample_scores = []
 
+        val_batch_count = 0
         for test_data in self.val_dataloader:
+            val_batch_count += 1
+            print(f"[VAL DEBUG] 处理验证批次 {val_batch_count}")
+            
             test_batch = DataProto.from_single_dict(test_data)
+           
 
             # repeat test batch
             test_batch = test_batch.repeat(
@@ -629,10 +641,18 @@ class RayPPOTrainer:
             test_batch = test_batch.union(test_output_gen_batch)
 
             # evaluate using reward_function
-            result = self.val_reward_fn(test_batch, return_dict=True)
-            reward_tensor = result["reward_tensor"]
-            scores = reward_tensor.sum(-1).cpu().tolist()
-            sample_scores.extend(scores)
+            print(f"[VAL DEBUG] 调用验证奖励函数...")
+            try:
+                result = self.val_reward_fn(test_batch, return_dict=True)
+                reward_tensor = result["reward_tensor"]
+                scores = reward_tensor.sum(-1).cpu().tolist()
+                sample_scores.extend(scores)
+                print(f"[VAL DEBUG] ✅ 验证奖励计算成功，分数数量: {len(scores)}")
+            except Exception as e:
+                print(f"[VAL DEBUG] ❌ 验证奖励函数执行失败: {e}")
+                import traceback
+                traceback.print_exc()
+                raise
 
             reward_extra_infos_dict["reward"].extend(scores)
             if "reward_extra_info" in result:
@@ -655,10 +675,10 @@ class RayPPOTrainer:
             for var_name, metric2val in var2metric2val.items():
                 n_max = max([int(name.split("@")[-1].split("/")[0]) for name in metric2val.keys()])
                 for metric_name, metric_val in metric2val.items():
+                    # 将所有核心变量的主要指标都标记为核心指标，便于在wandb中查看
                     if (
                         (var_name == core_var)
                         and any(metric_name.startswith(pfx) for pfx in ["mean", "maj", "best"])
-                        and (f"@{n_max}" in metric_name)
                     ):
                         metric_sec = "val-core"
                     else:
@@ -666,6 +686,8 @@ class RayPPOTrainer:
                     pfx = f"{metric_sec}/{data_source}/{var_name}/{metric_name}"
                     metric_dict[pfx] = metric_val
 
+        print(f"[VAL DEBUG] ✅ 验证完成，返回 {len(metric_dict)} 个指标")
+        print(f"[VAL DEBUG] 验证指标键: {list(metric_dict.keys())[:5]}...")  # 显示前5个键
         return metric_dict
 
     def init_workers(self):
@@ -922,7 +944,8 @@ class RayPPOTrainer:
                 timing_raw = {}
 
                 batch: DataProto = DataProto.from_single_dict(batch_dict)
-
+                print('222333'*10,batch_dict.keys(), batch.non_tensor_batch.keys())
+                # print(batch.non_tensor_batch.values())
                 # pop those keys for generation
                 if "multi_modal_inputs" in batch.non_tensor_batch.keys():
                     gen_batch = batch.pop(
@@ -942,10 +965,14 @@ class RayPPOTrainer:
                 print(f' [DEBUG config] config={self.config.actor_rollout_ref.rollout.agent}')
                 if self.config.actor_rollout_ref.rollout.agent.activate_agent:
                     tool_name_key = self.config.actor_rollout_ref.rollout.agent.tool_name_key
+                    
+                    
+                    print('aaa'*10)
+                    print(f' [DEBUG trainer 222] {tool_name_key=}')
                     if tool_name_key and tool_name_key in batch.non_tensor_batch.keys():
                         gen_batch.non_tensor_batch[tool_name_key] = batch.non_tensor_batch.pop(tool_name_key)
                         print(f' [DEBUG trainer] {gen_batch.non_tensor_batch.keys()=}')
-
+                  
                 is_last_step = self.global_steps >= self.total_training_steps
 
                 with _timer("step", timing_raw):

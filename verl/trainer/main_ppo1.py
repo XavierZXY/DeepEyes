@@ -23,6 +23,7 @@ import ray
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 
 
+
 def get_custom_reward_fn(config):
     import importlib.util
     import sys
@@ -75,6 +76,29 @@ def run_ppo(config) -> None:
             },
             num_cpus=config.ray_init.num_cpus,
         )
+    #     ray.init(
+    #         # address='172.18.148.192:6379',
+    #         # address='0.0.0.0:6379',
+    #         address="auto",
+    #     runtime_env={
+    #         "env_vars": {
+    #             "TOKENIZERS_PARALLELISM": "true",
+    #             "NCCL_DEBUG": "WARN",
+    #             "VLLM_LOGGING_LEVEL": "WARN"
+    #         },
+    #         # "excludes": ["*.pyc", "__pycache__", "./results/", "./result/"] 
+    #     },
+    #     num_cpus=config.ray_init.num_cpus,
+    #     # _system_config={
+    #     #     "object_spilling_config": json.dumps({
+    #     #         "type": "filesystem",
+    #     #         "params": {
+    #     #             "directory_path": ["/app/xiaominl/DeepEyes/ray_spill"]
+    #     #         }
+    #         # }
+    #     # )
+    #     # }
+    # )
 
     runner = TaskRunner.remote()
     ray.get(runner.run.remote(config))
@@ -205,7 +229,8 @@ class TaskRunner:
             val_reward_fn=val_reward_fn,
         )
         trainer.init_workers()
-        trainer.fit()
+        # trainer.fit()
+        uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
 if __name__ == "__main__":

@@ -72,7 +72,7 @@ class RLHFDataset(Dataset):
 
         self.cache_dir = os.path.expanduser(config.get("cache_dir", "~/.cache/verl/rlhf"))
         self.prompt_key = config.get("prompt_key", "prompt")
-        self.image_key = config.get("image_key", "images")
+        self.image_key = config.get("image_key", "Images")
         self.video_key = config.get("video_key", "videos")
         self.max_prompt_length = config.get("max_prompt_length", 1024)
 
@@ -110,6 +110,7 @@ class RLHFDataset(Dataset):
         if self.filter_overlong_prompts:
             tokenizer = self.tokenizer
             prompt_key = self.prompt_key
+          
             self.dataframe = self.dataframe.filter(
                 lambda doc: len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True))
                 <= self.max_prompt_length,

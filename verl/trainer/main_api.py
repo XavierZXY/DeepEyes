@@ -19,9 +19,42 @@ import os
 
 import hydra
 import ray
-
+import json
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
+import uvicorn
 
+from pydantic import BaseModel
+from verl import DataProto
+import pickle
+
+from ray import serve
+import numpy as np
+
+# @serve.deployment
+# class ActorRolloutServe(RayPPOTrainer):
+#     def __init__(self, *args, ):
+#         super().__init__(*args)
+  
+
+#     def run(self, data_proto: "DataProto"):
+#         # 这里 data_proto 是真正的 DataProto 对象
+#         return self.actor_rollout_wg.generate_sequences(data_proto)
+
+#     async def __call__(self, request):
+#         body = await request.body()
+#         data_proto = pickle.loads(body)
+#         result = self.run(data_proto)
+#         return result
+@serve.deployment
+class ActorRolloutServe:
+    def __init__(self, trainer):
+        self.trainer = trainer
+
+    async def __call__(self, request):
+        data = await request.json()
+        dp = DataProto.from_single_dict({"input_ids": np.array([data["prompt"]])})
+        result = self.trainer.actor_rollout_wg.generate_sequences(dp)
+        return {"output": str(result)}
 
 def get_custom_reward_fn(config):
     import importlib.util
@@ -75,6 +108,7 @@ def run_ppo(config) -> None:
             },
             num_cpus=config.ray_init.num_cpus,
         )
+
 
     runner = TaskRunner.remote()
     ray.get(runner.run.remote(config))
@@ -205,7 +239,13 @@ class TaskRunner:
             val_reward_fn=val_reward_fn,
         )
         trainer.init_workers()
-        trainer.fit()
+        serve.start(detached=True, http_options={"host": "0.0.0.0", "port": 8081})
+        deployment = ActorRolloutServe.bind(trainer)
+
+# 启动 serve.run
+        serve.run(deployment)
+        # trainer.fit()
+     
 
 
 if __name__ == "__main__":

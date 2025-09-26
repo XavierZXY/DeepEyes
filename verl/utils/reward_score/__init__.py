@@ -76,6 +76,10 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
     elif data_source in ["frozenlake"]:
         res = 0.0
 
+    elif data_source in ["image_restoration"]:
+        from . import image_restoration
+        res = image_restoration.compute_score(solution_str, ground_truth, extra_info)
+
     else:
         raise NotImplementedError(f"Reward function is not implemented for {data_source=}")
 

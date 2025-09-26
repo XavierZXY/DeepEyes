@@ -349,11 +349,14 @@ class ActorRolloutRefWorker(Worker):
         # TODO(sgm): support FSDP hybrid shard for larger model
         infer_tp = self.config.rollout.tensor_model_parallel_size
         dp = self.world_size // infer_tp
+        print(f' [DEBUG 111] {self.world_size=}, {infer_tp=}, {dp=}')
         assert self.world_size % infer_tp == 0, (
             f"rollout world_size: {self.world_size} is not divisible by infer_tp: {infer_tp}"
         )
         rollout_device_mesh = init_device_mesh("cuda", mesh_shape=(dp, infer_tp), mesh_dim_names=["dp", "infer_tp"])
         rollout_name = self.config.rollout.name
+        print('$'*50)
+       
         if rollout_name == "hf":
             from verl.workers.rollout import HFRollout
             from verl.workers.sharding_manager import BaseShardingManager
@@ -368,6 +371,14 @@ class ActorRolloutRefWorker(Worker):
 
             log_gpu_memory_usage(f"Before building {rollout_name} rollout", logger=None)
             local_path = copy_to_local(self.config.model.path)
+            print('999',local_path,
+                    self.config.rollout,
+                    '7777',
+                    self.tokenizer,
+                    '666',
+                    self.actor_model_config,
+                    rollout_device_mesh,
+                    trust_remote_code,)
             if vllm_mode == "customized":
                 rollout = vLLMRollout(
                     actor_module=self.actor_module_fsdp,

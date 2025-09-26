@@ -71,7 +71,15 @@ class NaiveRewardManager:
             prompt_str = self.tokenizer.decode(valid_prompt_ids)
             response_str = self.tokenizer.decode(valid_response_ids)
 
-            ground_truth = data_item.non_tensor_batch["reward_model"]["ground_truth"]
+            # Handle different ground truth formats
+            if "reward_model" in data_item.non_tensor_batch and isinstance(data_item.non_tensor_batch["reward_model"], dict):
+                ground_truth = data_item.non_tensor_batch["reward_model"]["ground_truth"]
+            else:
+                # For image restoration task, construct ground truth from available data
+                ground_truth = {
+                    "reward_model": data_item.non_tensor_batch.get("reward_model", []),
+                    "env_name": data_item.non_tensor_batch.get("env_name", "")
+                }
 
             data_source = data_item.non_tensor_batch[self.reward_fn_key]
 

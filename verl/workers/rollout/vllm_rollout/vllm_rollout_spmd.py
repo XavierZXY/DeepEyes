@@ -218,7 +218,9 @@ class vLLMRollout(BaseRollout):
         # left-padded attention_mask
         attention_mask = prompts.batch["attention_mask"]
         position_ids = prompts.batch["position_ids"]
-
+        # print(f' [DEBUG vllm rollout] {idx.shape=}, {attention_mask.shape=}, {position_ids.shape=}, {prompts.non_tensor_batch.keys()=}')
+        # print(f' [DEBUG vllm rollout2] {prompts}')
+        print('***')
         # used to construct attention_mask
         eos_token_id = prompts.meta_info["eos_token_id"]
 
