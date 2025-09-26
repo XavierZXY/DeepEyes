@@ -12,22 +12,23 @@ set -xmain_ppo
 #     --disable-log-requests
 
 PROJECT_NAME="agent_vlagent"
-EXPERIMENT_NAME="debug_for_TIR_bs256_toolreward1_8gpu_2nodes"
+EXPERIMENT_NAME="debug_for_TIR_IR"
 # export CUDA_VISIBLE_DEVICES=4,5,6,7
 export SAVE_CHECKPOINT_DIR=/app/models/verl_checkpoints
 # export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
-export WORLD_SIZE=2
+export WORLD_SIZE=1
 export NCCL_DEBUG=INFO
 export ROCM_USE_GPU_COPY=1
 
 export WANDB_API_KEY=ce0821ccdf886f2dbb5703772a0c41aa85611afb
+export HYDRA_FULL_ERROR=1
 
-export MASTER_ADDR=172.18.148.192   # head node IP
-export MASTER_PORT=29500            # 任意未被占用端口
+
 # export NCCL_DEBUG=INFO
 # export NCCL_IB_DISABLE=1
 export NCCL_SOCKET_IFNAME=bond0.2026
-
+export MASTER_ADDR=172.18.148.192   # head node IP
+export MASTER_PORT=29500            # 任意未被占用端口
 export LLM_AS_A_JUDGE_BASE="http://172.18.148.193:18901/v1"
 export VLLM_USE_TRITON_FLASH_ATTN=0
 export HSA_FORCE_FINE_GRAIN_PCIE=1 
@@ -40,10 +41,10 @@ VISUAL_DATASET_TEST=${BASEDIR}/seekworld_test.parquet
 EUREKA_DATASET_TRAIN=${BASEDIR}/data_thinklite_reasoning_acc.parquet
 
 REF_MODEL_PATH=/app/models/Qwen2.5-VL-7B-Instruct
-RAY_ADDRESS='http://172.18.148.192:8265' ray job submit --address="http://172.18.148.192:8265" \
-    --runtime-env /app/xiaominl/DeepEyes/verl/trainer/runtime_env.yaml \
-    --no-wait \
-    -- \
+# RAY_ADDRESS='http://172.18.148.192:8265' ray job submit --address="http://172.18.148.192:8265" \
+#     --runtime-env /app/xiaominl/DeepEyes/verl/trainer/runtime_env.yaml \
+#     --no-wait \
+#     -- \
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     +debug=False \
     +vs_debug=False \
@@ -70,7 +71,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=8 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=4 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.n=16 \
+    actor_rollout_ref.rollout.n=1 \
     actor_rollout_ref.rollout.max_num_batched_tokens=32768 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.15 \
     actor_rollout_ref.rollout.enforce_eager=False \
