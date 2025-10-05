@@ -1,0 +1,25 @@
+{
+  "evaluation_time": "2025-09-29T14:09:57.916516",
+  "model_path": "/app/models/Qwen2.5-VL-7B-Instruct",
+  "data_file": "/app/datasets/DeepEyes-Datasets-47k/data_0.1.2_visual_toolbox_v2.parquet",
+  "total_samples": 1,
+  "successful_samples": 0,
+  "success_rate": 0.0,
+  "failed_samples": [
+    {
+      "sample_idx": 0,
+      "env_name": "visual_toolbox_v2",
+      "status": "failed",
+      "error": "Expected there to be 1 prompt updates corresponding to 1 image items, but instead found 0 prompt updates! This is likely because you forgot to include input placeholder tokens (e.g., `<image>`, `<|image_pad|>`) in the prompt. If the model has a chat template, make sure you have applied it before calling `LLM.generate`."
+    }
+  ],
+  "sample_results": [
+    {
+      "sample_idx": 0,
+      "env_name": "visual_toolbox_v2",
+      "status": "failed",
+      "error": "Expected there to be 1 prompt updates corresponding to 1 image items, but instead found 0 prompt updates! This is likely because you forgot to include input placeholder tokens (e.g., `<image>`, `<|image_pad|>`) in the prompt. If the model has a chat template, make sure you have applied it before calling `LLM.generate`."
+    }
+  ],
+  "format_version": "v2"
+}

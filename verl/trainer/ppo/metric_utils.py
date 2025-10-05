@@ -212,8 +212,8 @@ def compute_agent_metrics(batch: DataProto):
             total_count = torch.sum(deg_tensor).item()
             mean_count = torch.mean(deg_tensor).item()
             metrics.update({
-                f"agent/degradation_{deg_type}_total": total_count,
-                f"agent/degradation_{deg_type}_mean": mean_count,
+                f"degradation_stats/{deg_type}_total": total_count,
+                f"degradation_stats/{deg_type}_mean": mean_count,
             })
             if total_count > 0:
                 print(f"[METRICS DEBUG] {deg_type}: total={total_count:.1f}, mean={mean_count:.3f}")
@@ -234,10 +234,74 @@ def compute_agent_metrics(batch: DataProto):
                 avg_non_zero_consecutive = 0.0
                 
             metrics.update({
-                f"agent/degradation_{deg_type}_consecutive_max": max_consecutive,
-                f"agent/degradation_{deg_type}_consecutive_mean": mean_consecutive,
-                f"agent/degradation_{deg_type}_consecutive_avg_nonzero": avg_non_zero_consecutive,
+                f"degradation_stats/{deg_type}_consecutive_max": max_consecutive,
+                f"degradation_stats/{deg_type}_consecutive_mean": mean_consecutive,
+                f"degradation_stats/{deg_type}_consecutive_avg_nonzero": avg_non_zero_consecutive,
             })
+    
+    # 新增：clean准确率统计（只统计clean样本）
+    if 'ir_clean_accuracy' in batch.batch.keys() and 'ir_is_clean_sample' in batch.batch.keys():
+        clean_accuracy_tensor = batch.batch.pop('ir_clean_accuracy').detach().cpu()
+        is_clean_sample_tensor = batch.batch.pop('ir_is_clean_sample').detach().cpu()
+        
+        # 过滤掉-1值（表示不适用的clean_accuracy）和非clean样本
+        clean_mask = is_clean_sample_tensor > 0  # 只选择clean样本
+        if torch.sum(clean_mask).item() > 0:
+            clean_accuracy_values = clean_accuracy_tensor[clean_mask]
+            # 确保clean_accuracy值都是有效的（不是-1）
+            valid_mask = clean_accuracy_values >= 0
+            if torch.sum(valid_mask).item() > 0:
+                valid_clean_accuracy = clean_accuracy_values[valid_mask]
+                clean_sample_count = len(valid_clean_accuracy)
+                clean_correct_count = torch.sum(valid_clean_accuracy).item()
+                clean_accuracy_rate = clean_correct_count / clean_sample_count
+                
+                metrics.update({
+                    "degradation_stats/clean_accuracy_rate": clean_accuracy_rate,
+                    "degradation_stats/clean_sample_count": clean_sample_count,
+                    "degradation_stats/clean_correct_count": clean_correct_count,
+                })
+                print(f"[METRICS DEBUG] clean样本统计: 总数={clean_sample_count:.0f}, 正确={clean_correct_count:.0f}, 准确率={clean_accuracy_rate:.3f}")
+            else:
+                print(f"[METRICS DEBUG] clean样本存在但clean_accuracy值无效")
+        else:
+            print(f"[METRICS DEBUG] 本批次无clean样本")
+    elif 'ir_is_clean_sample' in batch.batch.keys():
+        # 只有is_clean_sample但没有clean_accuracy
+        is_clean_sample_tensor = batch.batch.pop('ir_is_clean_sample').detach().cpu()
+        clean_sample_count = torch.sum(is_clean_sample_tensor).item()
+        print(f"[METRICS DEBUG] clean样本数量: {clean_sample_count:.0f}")
+    else:
+        print(f"[METRICS DEBUG] 缺少clean相关键")
+    
+    # 新增：工具使用统计（使用独立的工具统计管理器）
+    from verl.utils.tool_statistics_manager import get_tool_stats_manager
+    
+    tool_stats_manager = get_tool_stats_manager()
+    tool_names = tool_stats_manager.all_tool_names
+    
+    for tool_name in tool_names:
+        usage_key = f"tool_usage_{tool_name}"
+        if usage_key in batch.batch.keys():
+            tool_tensor = batch.batch.pop(usage_key).detach().cpu()
+            total_usage = torch.sum(tool_tensor).item()
+            mean_usage = torch.mean(tool_tensor).item()
+            max_usage = torch.max(tool_tensor).item()
+            
+            # 只统计有使用的工具
+            non_zero_usage = tool_tensor[tool_tensor > 0]
+            usage_rate = (len(non_zero_usage) / len(tool_tensor)) if len(tool_tensor) > 0 else 0.0
+            
+            metrics.update({
+                f"tool_stats/{tool_name}_total": total_usage,
+                f"tool_stats/{tool_name}_mean": mean_usage,
+                f"tool_stats/{tool_name}_max": max_usage,
+                f"tool_stats/{tool_name}_usage_rate": usage_rate,
+            })
+            
+            # 只显示使用量较高的工具，避免日志过多
+            if total_usage >= 5:  # 只显示使用5次以上的工具
+                print(f"[METRICS DEBUG] {tool_name}: total={total_usage:.1f}, mean={mean_usage:.3f}, rate={usage_rate:.3f}")
     
     return metrics
 

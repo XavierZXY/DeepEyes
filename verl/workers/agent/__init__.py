@@ -10,10 +10,12 @@ from .envs.mm_process_engine.visual_toolbox_v4 import VisualToolBoxV4
 from .envs.mm_process_engine.visual_toolbox_v5 import VisualToolBoxV5
 from .envs.mm_process_engine.DeblurToolbox import DeblurToolbox
 from .envs.mm_process_engine.XRestormerToolbox import XRestormerDerainToolbox,XRestormerMotionDeblurringToolbox
+from .envs.mm_process_engine.RestormerToolbox import RestormerMotionDeblurringToolbox,RestormerDefocusDeblurringToolbox,RestormerDerrainingToolbox
 from .envs.mm_process_engine.DehazeFormerToolbox import DehazeFormerToolbox
 from .envs.mm_process_engine.SwinIRToolbox import SwinIRDenoisingToolbox,SwinIRSrToolbox,SwinIRJpegArtifactRemovalToolbox
 from .envs.mm_process_engine.MPRNetToolbox import MPRNetDenoisingToolbox,MPRNetDeraininingToolbox,MPRNetMotionDeblurringToolbox,BaseMPRNetToolbox
 from .envs.mm_process_engine.BrighteningToolbox import HistogramEqualizationTool,GammaCorrectionTool,ConstantShiftTool,LocalImageProcessingTool
+from .envs.mm_process_engine.FBCNNToolbox import FBCNNJpegArtifactRemovalToolbox,FBCNNBlindQualityAssessmentToolbox
 
 from .envs.visual_agent.vl_agent_v2 import VLAgentEnvV2
 from .envs.visual_agent.vl_agent_v3 import VLAgentEnvV3
@@ -28,4 +30,4 @@ try:
 except Exception as err:
     print(f' [ERROR] Failed to register FrozenLakeTool : {err=}')
 
-from .parallel_env import agent_rollout_loop
+from .parallel_env_v2 import agent_rollout_loop

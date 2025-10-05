@@ -86,6 +86,13 @@ class DehazeFormerToolbox(ToolBase):
                 raise ValueError("No image found in the current state to process.")
             
             source_image = self.multi_modal_data['image'][0]
+            
+            # 添加输入图像调试信息
+            import numpy as np
+            input_array = np.array(source_image)
+            input_mean = np.mean(input_array)
+            input_std = np.std(input_array)
+            print(f"[DEHAZE DEBUG] 输入图像: 尺寸={source_image.size}, mean={input_mean:.2f}, std={input_std:.2f}", flush=True)
 
             # Convert PIL Image to bytes to send to the API
             img_byte_arr = io.BytesIO()
@@ -94,6 +101,7 @@ class DehazeFormerToolbox(ToolBase):
 
             # Call the DehazeFormer API
             files = {'image': ('hazy_image.png', img_byte_arr, 'image/png')}
+            print(f"[DEHAZE DEBUG] 发送图像到去雾服务器", flush=True)
             response = requests.post(self.api_url, files=files, timeout=60)
             
             if response.status_code != 200:
@@ -102,6 +110,22 @@ class DehazeFormerToolbox(ToolBase):
             # Process the returned image
             dehazed_image_bytes = io.BytesIO(response.content)
             current_image = Image.open(dehazed_image_bytes)
+            
+            # 添加输出图像调试信息
+            output_array = np.array(current_image)
+            output_mean = np.mean(output_array)
+            output_std = np.std(output_array)
+            print(f"[DEHAZE DEBUG] 输出图像: 尺寸={current_image.size}, mean={output_mean:.2f}, std={output_std:.2f}", flush=True)
+            
+            # 检查图像一致性
+            size_changed = source_image.size != current_image.size
+            significant_change = abs(input_mean - output_mean) > 10 or abs(input_std - output_std) > 10
+            print(f"[DEHAZE DEBUG] 图像变化: 尺寸变化={size_changed}, 显著统计变化={significant_change}", flush=True)
+            
+            # 检查像素差异
+            if input_array.shape == output_array.shape:
+                pixel_diff = np.mean(np.abs(input_array.astype(float) - output_array.astype(float)))
+                print(f"[DEHAZE DEBUG] 像素差异: 平均绝对差={pixel_diff:.2f}", flush=True)
 
             # Prepare the observation for the next step
             obs = {
@@ -112,7 +136,7 @@ class DehazeFormerToolbox(ToolBase):
             execution_time = end_time - start_time
             print(f"[TOOL EXECUTE] ✅ {self.name} 执行成功 (耗时: {execution_time:.2f}s)")
             
-            reward = 0.1  # Reward for a successful tool call
+            reward = 0.  # Reward for a successful tool call
             done = False
             info = {"status": "success", "tool_used": tool_name, "execution_time": execution_time}
             return obs, reward, done, info

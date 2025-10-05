@@ -146,14 +146,32 @@ class BaseSwinIRToolbox(ToolBase):
             current_image = self.multi_modal_data['image'][0]
             print(f"[SWINIR DEBUG] 开始处理图像，尺寸: {current_image.size}", flush=True)
             
+            # 计算输入图像的统计信息
+            import numpy as np
+            input_array = np.array(current_image)
+            input_mean = np.mean(input_array)
+            input_std = np.std(input_array)
+            print(f"[SWINIR DEBUG] 输入图像统计: mean={input_mean:.2f}, std={input_std:.2f}, shape={input_array.shape}", flush=True)
+            
             params = self.build_params(args)
             print(f"[SWINIR DEBUG] API参数: {params}", flush=True)
             
             restored_image = self._call_swinir_api(current_image, params)
             print(f"[SWINIR DEBUG] API调用完成，返回图像尺寸: {restored_image.size}", flush=True)
+            
+            # 计算输出图像的统计信息
+            output_array = np.array(restored_image)
+            output_mean = np.mean(output_array)
+            output_std = np.std(output_array)
+            print(f"[SWINIR DEBUG] 输出图像统计: mean={output_mean:.2f}, std={output_std:.2f}, shape={output_array.shape}", flush=True)
+            
+            # 检查图像一致性
+            size_changed = current_image.size != restored_image.size
+            significant_change = abs(input_mean - output_mean) > 10 or abs(input_std - output_std) > 10
+            print(f"[SWINIR DEBUG] 图像变化检查: 尺寸变化={size_changed}, 显著统计变化={significant_change}", flush=True)
 
             # 使用 USER_PROMPT_V1 的正确格式化方式
-            formatted_prompt = self.user_prompt.format(tool_name=self.name)
+            formatted_prompt = self.user_prompt.format(tool_name=self.name) + ' Note that you have already used the super-resolution tool and are not allowed to use it a second time.'
             
             obs = {
                 "prompt": (
@@ -169,7 +187,7 @@ class BaseSwinIRToolbox(ToolBase):
             execution_time = end_time - start_time
             print(f"[TOOL EXECUTE] ✅ {self.name} 执行成功 (耗时: {execution_time:.2f}s)")
             
-            reward = 0.1
+            reward = 0.
             done = False
             info = {"status": "success", "tool_used": self.name, "execution_time": execution_time}
             return obs, reward, done, info

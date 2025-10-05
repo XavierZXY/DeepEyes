@@ -1,0 +1,11 @@
+{
+  "env_name": "visual_toolbox_v2",
+  "data_source": "vstar",
+  "num_images": 1,
+  "image_sizes": [
+    [
+      364,
+      504
+    ]
+  ]
+}

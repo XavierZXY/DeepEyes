@@ -97,7 +97,7 @@ class LocalImageProcessingTool(ToolBase):
             execution_time = end_time - start_time
             print(f"[TOOL EXECUTE] ✅ {self.name} 执行成功 (耗时: {execution_time:.2f}s)")
             
-            return obs, 0.1, False, {"status": "success", "tool_used": self.name, "execution_time": execution_time}
+            return obs, 0., False, {"status": "success", "tool_used": self.name, "execution_time": execution_time}
 
         except Exception as e:
             end_time = time.time()

@@ -1,0 +1,44 @@
+{
+  "test_info": {
+    "timestamp": "2025-09-29T13:56:11.958650",
+    "total_turns": 3,
+    "output_directory": "test_results"
+  },
+  "restoration_log": [
+    "jpeg compression artifact",
+    "motion blur",
+    "haze"
+  ],
+  "conversation_history": [
+    {
+      "turn": 1,
+      "think_content": "The image shows noticeable 8x8 blockiness and ringing artifacts, especially in flat areas. According to the restoration principle, compression artifacts are Priority 1 and must be fixed first.",
+      "tool_name": "swinir_jpeg_artifact_removal",
+      "tool_arguments": {
+        "jpeg": 40
+      },
+      "tool_message": "Successfully removed JPEG compression artifacts. Blockiness reduced significantly.",
+      "image_path": "test_results/turn_1_swinir-jpeg-artifact-removal.png"
+    },
+    {
+      "turn": 2,
+      "think_content": "The compression artifacts are gone, but a clear directional blur is now visible, indicating camera shake. This is an imaging degradation (Priority 2) and is now the most critical issue.",
+      "tool_name": "xrestormer_motion_deblurring",
+      "tool_arguments": {
+        "strength": 0.8
+      },
+      "tool_message": "Motion blur correction applied. Image sharpness improved.",
+      "image_path": "test_results/turn_2_xrestormer-motion-deblurring.png"
+    },
+    {
+      "turn": 3,
+      "think_content": "Motion blur has been addressed, but the image still appears hazy with reduced contrast and visibility. This is a scene degradation (Priority 3) that needs to be fixed.",
+      "tool_name": "dehazeformer_dehaze",
+      "tool_arguments": {
+        "strength": 0.7
+      },
+      "tool_message": "Haze removal completed. Visibility and contrast enhanced.",
+      "image_path": "test_results/turn_3_dehazeformer-dehaze.png"
+    }
+  ]
+}

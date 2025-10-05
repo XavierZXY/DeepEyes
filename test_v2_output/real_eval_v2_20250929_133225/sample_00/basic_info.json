@@ -1,0 +1,11 @@
+{
+  "env_name": "noise, dark",
+  "data_source": "image_restoration_v2",
+  "num_images": 1,
+  "image_sizes": [
+    [
+      420,
+      448
+    ]
+  ]
+}

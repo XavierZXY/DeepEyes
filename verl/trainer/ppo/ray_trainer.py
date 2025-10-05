@@ -670,6 +670,42 @@ class RayPPOTrainer:
 
         data_src2var2metric2val = process_validation_metrics(data_sources, sample_inputs, reward_extra_infos_dict)
         metric_dict = {}
+        
+        # 添加基于总样本数的直接性能指标
+        total_samples = len(sample_scores)
+        unique_data_sources = np.unique(data_sources)
+        
+        # 总样本数统计
+        metric_dict["val-stats/total_samples"] = total_samples
+        
+        # 为每个数据源添加基于全部样本的性能指标
+        for data_source in unique_data_sources:
+            data_source_mask = data_sources == data_source
+            data_source_samples = np.sum(data_source_mask)
+            metric_dict[f"val-stats/{data_source}/total_samples"] = data_source_samples
+            
+            # 获取该数据源的所有指标
+            if data_source in reward_extra_infos_dict or "reward" in reward_extra_infos_dict:
+                # 基于该数据源所有样本的直接统计
+                data_source_indices = np.where(data_source_mask)[0]
+                
+                # 总体奖励统计
+                data_source_rewards = [sample_scores[i] for i in data_source_indices]
+                if data_source_rewards:
+                    metric_dict[f"val-overall/{data_source}/reward_mean"] = np.mean(data_source_rewards)
+                    metric_dict[f"val-overall/{data_source}/reward_max"] = np.max(data_source_rewards)
+                    metric_dict[f"val-overall/{data_source}/reward_min"] = np.min(data_source_rewards)
+                    metric_dict[f"val-overall/{data_source}/reward_std"] = np.std(data_source_rewards)
+                
+                # 其他指标的总体统计
+                for key, all_values in reward_extra_infos_dict.items():
+                    if key.startswith('ir_') and len(all_values) > 0:
+                        data_source_values = [all_values[i] for i in data_source_indices if i < len(all_values)]
+                        if data_source_values:
+                            metric_dict[f"val-overall/{data_source}/{key}_mean"] = np.mean(data_source_values)
+                            metric_dict[f"val-overall/{data_source}/{key}_max"] = np.max(data_source_values)
+                            metric_dict[f"val-overall/{data_source}/{key}_min"] = np.min(data_source_values)
+        
         for data_source, var2metric2val in data_src2var2metric2val.items():
             core_var = "acc" if "acc" in var2metric2val else "reward"
             for var_name, metric2val in var2metric2val.items():
@@ -1129,6 +1165,46 @@ class RayPPOTrainer:
 
                 if self.config.actor_rollout_ref.rollout.agent.activate_agent:
                     metrics.update(compute_agent_metrics(batch=batch))
+
+                # 添加训练时的奖励详细指标到metrics（用于wandb记录）
+                if reward_extra_infos_dict:
+                    train_reward_metrics = {}
+                    tool_usage_metrics = {}
+                    
+                    for key, values in reward_extra_infos_dict.items():
+                        if key.startswith('ir_') and len(values) > 0:  # 只记录图像复原相关指标
+                            if 'processed_image' in key or 'reward_zero' in key or 'reward_positive' in key:
+                                # 工具调用和使用相关统计
+                                tool_usage_metrics[f"tool_usage/{key}/mean"] = np.mean(values)
+                                tool_usage_metrics[f"tool_usage/{key}/max"] = np.max(values)
+                                tool_usage_metrics[f"tool_usage/{key}/min"] = np.min(values)
+                            elif key == 'ir_clean_accuracy':
+                                # 特殊处理clean_accuracy，过滤掉-1值
+                                valid_values = [v for v in values if v >= 0]
+                                if len(valid_values) > 0:
+                                    train_reward_metrics[f"train_reward/{key}/mean"] = np.mean(valid_values)
+                                    train_reward_metrics[f"train_reward/{key}/max"] = np.max(valid_values)
+                                    train_reward_metrics[f"train_reward/{key}/min"] = np.min(valid_values)
+                                    train_reward_metrics[f"train_reward/{key}/count"] = len(valid_values)
+                                else:
+                                    # 如果没有有效值，设为0
+                                    train_reward_metrics[f"train_reward/{key}/mean"] = 0.0
+                                    train_reward_metrics[f"train_reward/{key}/max"] = 0.0
+                                    train_reward_metrics[f"train_reward/{key}/min"] = 0.0
+                                    train_reward_metrics[f"train_reward/{key}/count"] = 0
+                            else:
+                                # 奖励分数相关指标
+                                train_reward_metrics[f"train_reward/{key}/mean"] = np.mean(values)
+                                train_reward_metrics[f"train_reward/{key}/max"] = np.max(values)
+                                train_reward_metrics[f"train_reward/{key}/min"] = np.min(values)
+                    
+                    if train_reward_metrics:
+                        metrics.update(train_reward_metrics)
+                        print(f"[DEBUG] 添加训练奖励指标到wandb: {len(train_reward_metrics)}个指标")
+                    
+                    if tool_usage_metrics:
+                        metrics.update(tool_usage_metrics)
+                        print(f"[DEBUG] 添加工具使用指标到wandb: {len(tool_usage_metrics)}个指标")
 
                 # TODO: make a canonical logger that supports various backend
                 logger.log(data=metrics, step=self.global_steps, batch=batch, tokenizer=self.tokenizer)

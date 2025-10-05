@@ -91,6 +91,13 @@ class DeblurToolbox(ToolBase):
             
             current_image = self.multi_modal_data['image'][0]
             
+            # 添加输入图像调试信息
+            import numpy as np
+            input_array = np.array(current_image)
+            input_mean = np.mean(input_array)
+            input_std = np.std(input_array)
+            print(f"[DEBLUR DEBUG] 输入图像: 尺寸={current_image.size}, mean={input_mean:.2f}, std={input_std:.2f}", flush=True)
+            
             # 将 PIL Image 转换为二进制数据以便发送
             buffer = io.BytesIO()
             current_image.save(buffer, format='PNG')
@@ -100,7 +107,7 @@ class DeblurToolbox(ToolBase):
             # 'image_c' 是服务器端要求的字段名
             files = {'image_c': ('image.png', buffer, 'image/png')}
             
-            print(f"[DEBUG] Sending {current_image.size} image to deblur server...")
+            print(f"[DEBLUR DEBUG] 发送图像到去模糊服务器: {current_image.size}", flush=True)
             
             # 发送 POST 请求到 DRBNet 服务器
             response = requests.post(self.server_url, files=files, timeout=60)
@@ -115,6 +122,22 @@ class DeblurToolbox(ToolBase):
 
             # 处理返回的去模糊图像
             deblurred_image = Image.open(io.BytesIO(response.content))
+            
+            # 添加输出图像调试信息
+            output_array = np.array(deblurred_image)
+            output_mean = np.mean(output_array)
+            output_std = np.std(output_array)
+            print(f"[DEBLUR DEBUG] 输出图像: 尺寸={deblurred_image.size}, mean={output_mean:.2f}, std={output_std:.2f}", flush=True)
+            
+            # 检查图像一致性
+            size_changed = current_image.size != deblurred_image.size
+            significant_change = abs(input_mean - output_mean) > 10 or abs(input_std - output_std) > 10
+            print(f"[DEBLUR DEBUG] 图像变化: 尺寸变化={size_changed}, 显著统计变化={significant_change}", flush=True)
+            
+            # 检查图像是否完全相同
+            if input_array.shape == output_array.shape:
+                pixel_diff = np.mean(np.abs(input_array.astype(float) - output_array.astype(float)))
+                print(f"[DEBLUR DEBUG] 像素差异: 平均绝对差={pixel_diff:.2f}", flush=True)
 
             # 构建并返回新的观测值 (observation)
             obs = {
@@ -125,7 +148,7 @@ class DeblurToolbox(ToolBase):
             execution_time = end_time - start_time
             print(f"[TOOL EXECUTE] ✅ {self.name} 执行成功 (耗时: {execution_time:.2f}s)")
             
-            reward = 0.1  # 成功调用工具的奖励
+            reward = 0.  # 成功调用工具的奖励
             done = False
             info = {"status": "success", "tool_used": tool_name, "output_image_size": deblurred_image.size, "execution_time": execution_time}
             return obs, reward, done, info

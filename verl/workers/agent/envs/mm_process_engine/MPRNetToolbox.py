@@ -164,7 +164,7 @@ class BaseMPRNetToolbox(ToolBase):
             execution_time = end_time - start_time
             print(f"[TOOL EXECUTE] ✅ {self.name} 执行成功 (耗时: {execution_time:.2f}s)")
             
-            reward = 0.1
+            reward = 0.
             done = False
             info = {"status": "success", "tool_used": self.name, "execution_time": execution_time}
             return obs, reward, done, info
