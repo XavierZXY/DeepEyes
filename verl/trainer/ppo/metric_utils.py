@@ -285,6 +285,46 @@ def compute_reward_component_metrics(reward_extra_infos_dict: dict[str, list]) -
             # 也记录包含所有样本的统计（包括0分）
             metrics['reward/degradation_type_score_mean_all'] = np.mean(degradation_type_scores)
     
+    # 有参考图像质量指标统计 (SSIM, LPIPS, PSNR)
+    # 这些指标从reward_extra_infos_dict中提取（如果有的话）
+    # 注意：只统计>0的值（0表示工具未执行或计算失败）
+    
+    # SSIM统计 (0.0 - 1.0, 越高越好)
+    if 'ssim_score_ref' in reward_extra_infos_dict:
+        ssim_scores = reward_extra_infos_dict['ssim_score_ref']
+        if len(ssim_scores) > 0:
+            valid_ssim = [s for s in ssim_scores if s > 0.0]
+            if len(valid_ssim) > 0:
+                metrics['reward/ssim_mean'] = np.mean(valid_ssim)
+                metrics['reward/ssim_max'] = np.max(valid_ssim)
+                metrics['reward/ssim_min'] = np.min(valid_ssim)
+                metrics['reward/ssim_std'] = np.std(valid_ssim)
+                metrics['reward/ssim_valid_samples'] = len(valid_ssim)
+    
+    # LPIPS统计 (0.0 - 1.0, 越低越好)
+    if 'lpips_score_ref' in reward_extra_infos_dict:
+        lpips_scores = reward_extra_infos_dict['lpips_score_ref']
+        if len(lpips_scores) > 0:
+            valid_lpips = [s for s in lpips_scores if s > 0.0]
+            if len(valid_lpips) > 0:
+                metrics['reward/lpips_mean'] = np.mean(valid_lpips)
+                metrics['reward/lpips_max'] = np.max(valid_lpips)
+                metrics['reward/lpips_min'] = np.min(valid_lpips)
+                metrics['reward/lpips_std'] = np.std(valid_lpips)
+                metrics['reward/lpips_valid_samples'] = len(valid_lpips)
+    
+    # PSNR统计 (通常10-50, 越高越好)
+    if 'psnr_score_ref' in reward_extra_infos_dict:
+        psnr_scores = reward_extra_infos_dict['psnr_score_ref']
+        if len(psnr_scores) > 0:
+            valid_psnr = [s for s in psnr_scores if s > 0.0]
+            if len(valid_psnr) > 0:
+                metrics['reward/psnr_mean'] = np.mean(valid_psnr)
+                metrics['reward/psnr_max'] = np.max(valid_psnr)
+                metrics['reward/psnr_min'] = np.min(valid_psnr)
+                metrics['reward/psnr_std'] = np.std(valid_psnr)
+                metrics['reward/psnr_valid_samples'] = len(valid_psnr)
+    
     return metrics
 
 

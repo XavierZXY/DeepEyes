@@ -12,7 +12,7 @@ set -xmain_ppo
 #     --disable-log-requests
 
 PROJECT_NAME="agent_vlagent"
-EXPERIMENT_NAME="debug_for_TIR_IR_bs32_air_unrefrew_acc_mi300"
+EXPERIMENT_NAME="debug_for_TIR_IR_bs32_air_refrew_mi300"
 # export CUDA_VISIBLE_DEVICES=4,5,6,7
 export SAVE_CHECKPOINT_DIR=/app/xiaominl/models/verl_checkpoints
 # export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues

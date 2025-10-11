@@ -735,7 +735,31 @@ class RayPPOTrainer:
                     pfx = f"{metric_sec}/{data_source}/{var_name}/{metric_name}"
                     metric_dict[pfx] = metric_val
         
-        # 收集验证集的奖励组成部分统计指标
+        # 在统计之前，先计算有参考指标（如果需要图像上传）
+        if hasattr(self, 'logger') and 'wandb' in self.logger.logger and self.config.trainer.get('log_images_to_wandb', True):
+            if len(val_image_histories) > 0:
+                try:
+                    # Prepare batch data with all needed fields
+                    val_batch_data = {
+                        'image_history': val_image_histories,
+                        'raw_prompt': val_raw_prompts,
+                        'responses': val_responses,
+                        'original_images': val_original_images,
+                        'conversation_history': val_conversation_histories,
+                    }
+                    
+                    # 有参考指标按需计算（用于wandb展示和统计）
+                    val_ref_metrics = _compute_reference_metrics_for_batch(
+                        batch_data=val_batch_data,
+                        reward_extra_infos_dict=reward_extra_infos_dict
+                    )
+                    # 将有参考指标添加到reward_extra_infos_dict，以便后续统计
+                    reward_extra_infos_dict.update(val_ref_metrics)
+                    print(f"[DEBUG VAL REF METRICS] Added reference metrics to reward_extra_infos_dict")
+                except Exception as e:
+                    print(f"[WARNING] Failed to compute reference metrics for validation: {e}")
+        
+        # 收集验证集的奖励组成部分统计指标（现在包含有参考指标）
         if reward_extra_infos_dict:
             val_reward_component_metrics = compute_reward_component_metrics(reward_extra_infos_dict)
             # 添加val前缀以区分训练和验证
@@ -750,28 +774,13 @@ class RayPPOTrainer:
                     # Extract image quality scores from reward_extra_infos_dict
                     image_quality_scores = extract_image_quality_scores_from_rewards(reward_extra_infos_dict)
                     
-                    # Prepare batch data with all needed fields
-                    val_batch_data = {
-                        'image_history': val_image_histories,
-                        'raw_prompt': val_raw_prompts,
-                        'responses': val_responses,
-                        'original_images': val_original_images,
-                        'conversation_history': val_conversation_histories,
-                    }
-                    
-                    # Extract detailed metrics from reward_extra_infos_dict（只提取无参考指标）
+                    # Extract detailed metrics from reward_extra_infos_dict（包含无参考和有参考指标）
                     val_detailed_metrics = {}
                     for key in ['niqe_score', 'brisque_score', 'cpbd_score', 'clip_iqa_score', 'hyper_iqa_score',  # 无参考指标
-                               'image_quality_reward_continuous', 'mode', 'degradation_type', 'degradation_types_all']:  # 退化类型信息
+                               'image_quality_reward_continuous', 'mode', 'degradation_type', 'degradation_types_all',  # 退化类型信息
+                               'ssim_score_ref', 'lpips_score_ref', 'psnr_score_ref']:  # 有参考指标
                         if key in reward_extra_infos_dict:
                             val_detailed_metrics[key] = reward_extra_infos_dict[key]
-                    
-                    # 有参考指标按需计算（只用于wandb展示，不加入reward_extra_infos_dict）
-                    val_ref_metrics = _compute_reference_metrics_for_batch(
-                        batch_data=val_batch_data,
-                        reward_extra_infos_dict=reward_extra_infos_dict
-                    )
-                    val_detailed_metrics.update(val_ref_metrics)
                     
                     # Extract system prompt from the first sample's raw_prompt if available
                     system_prompt = None
@@ -1238,7 +1247,34 @@ class RayPPOTrainer:
                 if self.config.actor_rollout_ref.rollout.agent.activate_agent:
                     metrics.update(compute_agent_metrics(batch=batch))
                 
-                # 收集奖励组成部分的统计指标（格式奖励、图像质量奖励等）
+                # 在统计之前，先计算有参考指标（如果需要图像上传）
+                # 这样确保统计时包含完整的指标数据
+                if 'wandb' in logger.logger and self.config.trainer.get('log_images_to_wandb', True):
+                    if reward_extra_infos_dict:
+                        try:
+                            # Prepare batch data with all needed fields
+                            # Note: image_history_list is added by agent_rollout_loop in parallel_env.py
+                            image_history_key = 'image_history_list' if 'image_history_list' in batch.non_tensor_batch else 'image_history'
+                            batch_data = {
+                                'image_history': batch.non_tensor_batch.get(image_history_key, []),
+                                'raw_prompt': batch.non_tensor_batch.get('raw_prompt', []),
+                                'responses': batch.batch.get('responses', torch.tensor([])),
+                                'original_images': batch.non_tensor_batch.get('original_images', []),
+                                'conversation_history': batch.non_tensor_batch.get('conversation_history', []),
+                            }
+                            
+                            # 有参考指标按需计算（用于wandb展示和统计）
+                            ref_metrics = _compute_reference_metrics_for_batch(
+                                batch_data=batch_data,
+                                reward_extra_infos_dict=reward_extra_infos_dict
+                            )
+                            # 将有参考指标添加到reward_extra_infos_dict，以便后续统计
+                            reward_extra_infos_dict.update(ref_metrics)
+                            print(f"[DEBUG TRAIN REF METRICS] Added reference metrics to reward_extra_infos_dict")
+                        except Exception as e:
+                            print(f"[WARNING] Failed to compute reference metrics for training: {e}")
+                
+                # 收集奖励组成部分的统计指标（现在包含有参考指标）
                 if reward_extra_infos_dict:
                     reward_component_metrics = compute_reward_component_metrics(reward_extra_infos_dict)
                     metrics.update(reward_component_metrics)
@@ -1250,15 +1286,14 @@ class RayPPOTrainer:
                         # Extract image quality scores from reward_extra_infos_dict
                         image_quality_scores = extract_image_quality_scores_from_rewards(reward_extra_infos_dict)
                         
-                        # Prepare batch data with all needed fields
-                        # Note: image_history_list is added by agent_rollout_loop in parallel_env.py
+                        # Prepare batch data with all needed fields (已在上面准备好)
                         image_history_key = 'image_history_list' if 'image_history_list' in batch.non_tensor_batch else 'image_history'
                         batch_data = {
                             'image_history': batch.non_tensor_batch.get(image_history_key, []),
                             'raw_prompt': batch.non_tensor_batch.get('raw_prompt', []),
                             'responses': batch.batch.get('responses', torch.tensor([])),
-                            'original_images': batch.non_tensor_batch.get('original_images', []),  # 原图（来自extra_info）
-                            'conversation_history': batch.non_tensor_batch.get('conversation_history', []),  # 中间对话
+                            'original_images': batch.non_tensor_batch.get('original_images', []),
+                            'conversation_history': batch.non_tensor_batch.get('conversation_history', []),
                         }
                         
                         print(f"[DEBUG WANDB IMAGE] Keys in batch.non_tensor_batch: {list(batch.non_tensor_batch.keys())}")
@@ -1268,19 +1303,13 @@ class RayPPOTrainer:
                         if len(batch_data['original_images']) > 0:
                             print(f"[DEBUG WANDB IMAGE] original_images[0] type: {type(batch_data['original_images'][0])}, is None: {batch_data['original_images'][0] is None}")
                         
-                        # Extract detailed metrics from reward_extra_infos_dict（只提取无参考指标）
+                        # Extract detailed metrics from reward_extra_infos_dict（包含无参考和有参考指标）
                         detailed_metrics = {}
                         for key in ['niqe_score', 'brisque_score', 'cpbd_score', 'clip_iqa_score', 'hyper_iqa_score',  # 无参考指标
-                                   'image_quality_reward_continuous', 'mode', 'degradation_type', 'degradation_types_all']:  # 退化类型信息
+                                   'image_quality_reward_continuous', 'mode', 'degradation_type', 'degradation_types_all',  # 退化类型信息
+                                   'ssim_score_ref', 'lpips_score_ref', 'psnr_score_ref']:  # 有参考指标
                             if key in reward_extra_infos_dict:
                                 detailed_metrics[key] = reward_extra_infos_dict[key]
-                        
-                        # 有参考指标按需计算（只用于wandb展示，不加入reward_extra_infos_dict）
-                        ref_metrics = _compute_reference_metrics_for_batch(
-                            batch_data=batch_data,
-                            reward_extra_infos_dict=reward_extra_infos_dict
-                        )
-                        detailed_metrics.update(ref_metrics)
                         
                         # Extract system prompt from the first sample's raw_prompt if available
                         system_prompt = None
