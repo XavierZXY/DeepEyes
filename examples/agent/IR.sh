@@ -12,7 +12,7 @@ set -xmain_ppo
 #     --disable-log-requests
 
 PROJECT_NAME="agent_vlagent"
-EXPERIMENT_NAME="debug_for_TIR_IR_bs8_air_mi300"
+EXPERIMENT_NAME="debug_for_TIR_IR_bs32_air_unrefrew_acc_mi300"
 # export CUDA_VISIBLE_DEVICES=4,5,6,7
 export SAVE_CHECKPOINT_DIR=/app/xiaominl/models/verl_checkpoints
 # export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
@@ -32,6 +32,33 @@ export IMAGE_QUALITY_DISCRETIZE_LEVELS=0    # 离散化等级: 0=连续奖励, 1
 # - 早期训练: use_no_reference=True, discretize_levels=10 (离散化可减少波动)
 # - 如果有GT: use_no_reference=False (有参考指标更准确，但只对执行工具的样本有效)
 # ========================================================
+
+# ========== Reward Weight Configuration ==========
+# 控制各项奖励的权重系数
+export FORMAT_REWARD_WEIGHT=0.3             # 格式奖励权重（默认0.3）
+export QUALITY_REWARD_WEIGHT=0.7            # 图像质量奖励权重（默认0.7）
+export ENABLE_DEGRADATION_TYPE_REWARD=False # 是否启用退化类型奖励（默认False）
+export DEGRADATION_TYPE_REWARD_WEIGHT=1.0   # 退化类型奖励权重（默认1.0）
+
+# 说明：
+# 【默认奖励结构】
+# total_reward = FORMAT_WEIGHT × format_score + QUALITY_WEIGHT × quality_score
+#
+# 【启用退化类型奖励后】
+# total_reward = FORMAT_WEIGHT × format_score 
+#              + QUALITY_WEIGHT × quality_score 
+#              + DEGRADATION_TYPE_WEIGHT × degradation_type_score
+#
+# 【各项说明】
+# - format_score: 1.0(完美格式) 或 -1.0(格式违规)
+# - quality_score: 0.0~1.0 (图像质量分数，SSIM/LPIPS/PSNR或NIQE/BRISQUE/CPBD等)
+# - degradation_type_score: 0.0~1.0 (退化类型识别准确性，不考虑顺序，只看集合匹配)
+#
+# 【推荐配置】
+# - 默认训练: FORMAT=0.3, QUALITY=0.7, DEGRADATION_TYPE=关闭
+# - 强化类型识别: FORMAT=0.3, QUALITY=0.7, DEGRADATION_TYPE=开启(权重1.0)
+# - 通常保持 FORMAT_WEIGHT + QUALITY_WEIGHT = 1.0，退化类型作为额外奖励
+# ==================================================================
 
 export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=29500
@@ -112,7 +139,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.agent.tool_name_key=env_name \
     actor_rollout_ref.rollout.agent.single_response_max_tokens=10240 \
     actor_rollout_ref.rollout.agent.max_turns=1 \
-    actor_rollout_ref.rollout.agent.concurrent_workers=2 \
+    actor_rollout_ref.rollout.agent.concurrent_workers=1 \
     actor_rollout_ref.rollout.agent.show_tqdm=True \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb','rl_logging_board'] \

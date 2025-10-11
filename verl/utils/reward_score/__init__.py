@@ -88,7 +88,17 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
         use_no_reference = os.environ.get('IMAGE_QUALITY_USE_NO_REFERENCE', 'True').lower() == 'true'
         discretize_levels = int(os.environ.get('IMAGE_QUALITY_DISCRETIZE_LEVELS', '0'))
         
+        # 奖励权重配置
+        format_reward_weight = float(os.environ.get('FORMAT_REWARD_WEIGHT', '0.3'))
+        quality_reward_weight = float(os.environ.get('QUALITY_REWARD_WEIGHT', '0.7'))
+        
+        # 退化类型奖励配置（不考虑顺序，只看集合匹配）
+        enable_degradation_type_reward = os.environ.get('ENABLE_DEGRADATION_TYPE_REWARD', 'False').lower() == 'true'
+        degradation_type_reward_weight = float(os.environ.get('DEGRADATION_TYPE_REWARD_WEIGHT', '1.0'))
+        
         print(f"[INFO] Image Quality Reward Config: use_no_reference={use_no_reference}, discretize_levels={discretize_levels}")
+        print(f"[INFO] Reward Weights: format={format_reward_weight}, quality={quality_reward_weight}")
+        print(f"[INFO] Degradation Type Reward Config: enable={enable_degradation_type_reward}, weight={degradation_type_reward_weight}")
         
         res = image_restoration.compute_score_v2(
             solution_str, 
@@ -96,9 +106,15 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
             extra_info,
             discretize_levels=discretize_levels,  # 离散化等级 (0=连续，10=每10%，20=每5%)
             use_no_reference=use_no_reference,    # True=无参考(NIQE/BRISQUE等), False=有参考(SSIM/LPIPS/PSNR)
+            enable_degradation_type_reward=enable_degradation_type_reward,  # 是否启用退化类型奖励
+            degradation_type_reward_weight=degradation_type_reward_weight,  # 退化类型奖励权重
+            format_reward_weight=format_reward_weight,      # 格式奖励权重
+            quality_reward_weight=quality_reward_weight,    # 图像质量奖励权重
         )
         
         # 注意：
+        # - 默认奖励 = 格式奖励 + 图像质量奖励
+        # - 退化类型奖励是可选的额外奖励（需要启用）
         # - use_no_reference=True (默认): 使用无参考指标，适合训练，所有样本都能计算
         # - use_no_reference=False: 使用有参考指标，需要original_image，只对工具执行的样本有效
         # - Wandb展示时会按需计算有参考指标用于可视化

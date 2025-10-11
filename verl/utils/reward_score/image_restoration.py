@@ -1077,6 +1077,76 @@ def check_restoration_order_with_partial_credit_v2(predicted_log: List[str], rew
     return partial_score
 
 
+def check_degradation_type_match_v2(predicted_log: List[str], reward_model_order: List[str]) -> float:
+    """
+    Check if predicted degradation types match expected types (不考虑顺序，只看集合匹配).
+    
+    This function only checks if the predicted degradation types are correct,
+    regardless of order. Useful as a bonus reward.
+    
+    Args:
+        predicted_log: List of predicted degradation types
+        reward_model_order: List of expected degradation types (in addition order)
+        
+    Returns:
+        Float score between 0 and 1:
+        - 1.0: All expected types predicted (exact match)
+        - Partial: predicted_count / expected_count (only valid types)
+        - 0.0: No match or invalid types predicted
+    """
+    if not reward_model_order:
+        return 0.0
+    
+    # 过滤掉 "clean" 标签
+    if predicted_log:
+        filtered_predicted_log = [
+            item for item in predicted_log 
+            if item is not None and str(item).strip().lower() != "clean"
+        ]
+    else:
+        filtered_predicted_log = []
+    
+    # 如果过滤后没有预测，返回0
+    if not filtered_predicted_log:
+        print(f' [DEBUG degradation_type_match] 过滤clean后预测为空，返回0分')
+        return 0.0
+    
+    # 合并连续重复的退化类型
+    merged_predicted_log = merge_consecutive_duplicates_v2(filtered_predicted_log)
+    
+    # 转换为集合
+    try:
+        predicted_set = set(str(item) for item in merged_predicted_log if item is not None)
+        expected_set = set(str(item) for item in reward_model_order if item is not None)
+    except (TypeError, AttributeError) as e:
+        print(f' [DEBUG degradation_type_match] 集合转换失败: {e}')
+        return 0.0
+    
+    print(f' [DEBUG degradation_type_match] 预测集合: {predicted_set}')
+    print(f' [DEBUG degradation_type_match] 期望集合: {expected_set}')
+    
+    # Check if predicted types are valid (must be subset of expected)
+    if not predicted_set.issubset(expected_set):
+        invalid_types = predicted_set - expected_set
+        print(f' [DEBUG degradation_type_match] 预测了无效的退化类型: {invalid_types}')
+        return 0.0
+    
+    # Calculate match score
+    if predicted_set == expected_set:
+        # Perfect match: all types predicted
+        score = 1.0
+        print(f' [DEBUG degradation_type_match] 完全匹配，奖励=1.0')
+    elif len(predicted_set) > 0:
+        # Partial match: give credit for predicted valid types
+        score = len(predicted_set) / len(expected_set)
+        print(f' [DEBUG degradation_type_match] 部分匹配: {len(predicted_set)}/{len(expected_set)}, 奖励={score:.3f}')
+    else:
+        score = 0.0
+        print(f' [DEBUG degradation_type_match] 无匹配，奖励=0.0')
+    
+    return score
+
+
 def check_clean_image_response_v2(response_str: str) -> bool:
     """
     Check if the response correctly identifies a clean image.
@@ -1121,7 +1191,10 @@ def check_clean_image_response_v2(response_str: str) -> bool:
 def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_info: Dict = None, 
                      strict_format: bool = True, accuracy_mode: str = "image_quality", 
                      format_content_aware: bool = False, discretize_levels: int = 0,
-                     use_no_reference: bool = True) -> float:
+                     use_no_reference: bool = True, enable_degradation_type_reward: bool = False,
+                     degradation_type_reward_weight: float = 1.0,
+                     format_reward_weight: float = 0.3,
+                     quality_reward_weight: float = 0.7) -> float:
     """
     Compute reward score for image restoration task (v2 format).
     
@@ -1140,9 +1213,20 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
         discretize_levels: 图像质量奖励离散化等级数量（0=连续，10=每10%，20=每5%）
         use_no_reference: 是否使用无参考图像质量指标 (默认True，使用NIQE+BRISQUE+CPBD+CLIP-IQA+Hyper-IQA)
                          False时使用有参考指标 (SSIM+LPIPS+PSNR)
+        enable_degradation_type_reward: 是否启用退化类型奖励（不考虑顺序，只看集合匹配）
+        degradation_type_reward_weight: 退化类型奖励的权重系数（默认1.0）
+        format_reward_weight: 格式奖励的权重系数（默认0.3）
+        quality_reward_weight: 图像质量奖励的权重系数（默认0.7）
+    
+    奖励结构说明:
+        默认奖励 = FORMAT_WEIGHT × format_score + QUALITY_WEIGHT × quality_score
+        如果启用退化类型奖励:
+            total = FORMAT_WEIGHT × format_score 
+                  + QUALITY_WEIGHT × quality_score 
+                  + DEGRADATION_TYPE_WEIGHT × degradation_type_score
     
     Returns:
-        Float score between -1 and 1 (can be negative due to format violations)
+        Float score (can be negative due to format violations)
     """
     # Parse ground truth
     if isinstance(ground_truth, str):
@@ -1251,10 +1335,13 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
         print(f' [DEBUG image_restoration_v2] format_score={format_score:.3f}, logic_score={logic_score:.3f}, accuracy_score={accuracy_score:.3f}')
     
     # Combined score with weights
-    # 严格格式 + 退化类型顺序奖励
-    format_weight = 0.3  # 格式奖励（二元：1.0 或 -1.0）
+    # 奖励结构：格式奖励 + 图像质量奖励 + (可选)退化类型奖励
+    format_weight = format_reward_weight    # 格式奖励权重（从环境变量读取，默认0.3）
+    quality_weight = quality_reward_weight  # 图像质量奖励权重（从环境变量读取，默认0.7）
     logic_weight = 0.0  # 当前逻辑奖励被禁用
-    accuracy_weight = 0.7  # 退化类型顺序奖励（0.0 ~ 1.0）
+    
+    # accuracy_score实际是图像质量分数，重命名为quality_score更清晰
+    quality_score = accuracy_score
     
     # Format score处理：
     # - format_score = 1.0: 完美格式
@@ -1262,22 +1349,42 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
     
     # 对于格式违规，总分应该是负数
     if format_score == -1.0:
-        # 格式违规，总分为负（不给准确性奖励）
+        # 格式违规，总分为负（不给图像质量奖励）
         total_score = format_weight * format_score + logic_weight * logic_score
-        print(f' [DEBUG image_restoration_v2] 格式违规，不计算准确性奖励')
+        print(f' [DEBUG image_restoration_v2] 格式违规，不计算图像质量奖励')
     else:
-        # 格式正确，按权重计算总分
-        total_score = format_weight * format_score + logic_weight * logic_score + accuracy_weight * accuracy_score
+        # 格式正确，计算基础奖励 = 格式 + 图像质量
+        total_score = format_weight * format_score + logic_weight * logic_score + quality_weight * quality_score
     
-    print(f' [DEBUG image_restoration_v2] weights: format={format_weight}, logic={logic_weight}, accuracy={accuracy_weight}')
-    print(f' [DEBUG image_restoration_v2] total_score={total_score:.3f}')
+    print(f' [DEBUG image_restoration_v2] weights: format={format_weight}, quality={quality_weight}, logic={logic_weight}')
+    print(f' [DEBUG image_restoration_v2] base_reward={total_score:.3f} (format + quality)')
+    
+    # 计算退化类型奖励（可选，不考虑顺序）
+    degradation_type_score = 0.0
+    if enable_degradation_type_reward and not is_clean_sample:
+        degradation_type_score = check_degradation_type_match_v2(predicted_log, degradation_addition_order)
+        degradation_type_contribution = degradation_type_reward_weight * degradation_type_score
+        
+        # 只有格式正确时才给退化类型奖励
+        if format_score > 0:
+            total_score += degradation_type_contribution
+            print(f' [DEBUG degradation_type_reward] enabled, degradation_type_score={degradation_type_score:.3f}, weight={degradation_type_reward_weight:.1f}, contribution={degradation_type_contribution:.3f}')
+        else:
+            print(f' [DEBUG degradation_type_reward] skipped due to format error')
+    elif enable_degradation_type_reward and is_clean_sample:
+        print(f' [DEBUG degradation_type_reward] skipped for clean sample')
+    
+    print(f' [DEBUG image_restoration_v2] total_score={total_score:.3f} (包含退化类型奖励)' if enable_degradation_type_reward and format_score > 0 else f' [DEBUG image_restoration_v2] total_score={total_score:.3f}')
     
     # 返回包含各项分数的字典（用于监控）
     result_dict = {
-        "score": total_score,
-        "degradation_order_score": accuracy_score,  # 退化类型顺序奖励就是准确性奖励
-        "format_score": format_score,  # 格式奖励单独统计
-        "accuracy_score": accuracy_score  # 准确性奖励（退化类型顺序）
+        "score": total_score,                           # 总分（格式+质量+可选的退化类型）
+        "format_score": format_score,                   # 格式分数（1.0或-1.0）
+        "quality_score": quality_score,                 # 图像质量分数（0.0~1.0）
+        "degradation_type_score": degradation_type_score,  # 退化类型分数（0.0~1.0，仅在启用时计算）
+        # 保留旧字段以兼容
+        "accuracy_score": quality_score,                # 兼容旧代码，实际是图像质量分数
+        "degradation_order_score": quality_score,       # 兼容旧代码
     }
     
     # 添加退化类型信息（直接从数据集的reward_model获取）

@@ -423,11 +423,15 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
             
             # 保存对话历史（用于wandb可视化）
             if hasattr(env, 'conversation_history') and idx < len(env.conversation_history):
-                env.conversation_history[idx].append({
+                turn_record = {
                     'turn': step + 1,
                     'response': action_text,
                     'is_done': parsed_action.get('is_done', False)
-                })
+                }
+                # TODO: 未来可以从工具返回的info中提取错误信息
+                # 目前info是字典不是列表，无法在zip中使用
+                
+                env.conversation_history[idx].append(turn_record)
             
             # 统计是否以answer结束
             if parsed_action.get('is_done', False):

@@ -164,6 +164,14 @@ class NaiveRewardManager:
                     reward_extra_info['ir_format_score'].append(format_score)
                     reward_extra_info['ir_accuracy_score'].append(accuracy_score)
                     
+                    # 添加图像质量分数（新字段名，与accuracy_score相同但语义更清晰）
+                    quality_score = score.get("quality_score", accuracy_score)
+                    reward_extra_info['ir_quality_score'].append(quality_score)
+                    
+                    # 添加退化类型分数（用于统计mean/min/max/std）
+                    degradation_type_score = score.get("degradation_type_score", 0.0)
+                    reward_extra_info['ir_degradation_type_score'].append(degradation_type_score)
+                    
                     # 添加退化类型信息（用于wandb展示）
                     degradation_type = score.get("degradation_type", "unknown")
                     reward_extra_info['degradation_type'].append(degradation_type)
@@ -176,6 +184,8 @@ class NaiveRewardManager:
                     reward_extra_info['ir_clean_accuracy'].append(-1.0)
                     reward_extra_info['ir_format_score'].append(0.0)
                     reward_extra_info['ir_accuracy_score'].append(0.0)
+                    reward_extra_info['ir_quality_score'].append(0.0)
+                    reward_extra_info['ir_degradation_type_score'].append(0.0)
                     reward_extra_info['degradation_type'].append("unknown")
                 reward_extra_info['ir_degradation_order_score'].append(degradation_score)
                 
@@ -195,6 +205,8 @@ class NaiveRewardManager:
                 reward_extra_info['ir_clean_accuracy'].append(-1.0)  # 非图像复原任务也需要添加以保持数组长度一致
                 reward_extra_info['ir_format_score'].append(0.0)
                 reward_extra_info['ir_accuracy_score'].append(0.0)
+                reward_extra_info['ir_quality_score'].append(0.0)
+                reward_extra_info['ir_degradation_type_score'].append(0.0)
 
             if isinstance(score, dict):
                 reward = score["score"]

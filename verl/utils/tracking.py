@@ -51,8 +51,35 @@ class Tracking(object):
 
         if "tracking" in default_backend or "wandb" in default_backend:
             import wandb
-
-            wandb.init(project=project_name, name=experiment_name, config=config)
+            import os
+            
+            # 将环境变量配置的奖励参数添加到config中
+            if config is not None:
+                # 创建一个新的config副本以避免修改原始config
+                config_with_env = dict(config) if isinstance(config, dict) else config
+                
+                # 添加所有奖励相关的环境变量配置
+                reward_config = {
+                    # 图像质量配置
+                    'IMAGE_QUALITY_USE_NO_REFERENCE': os.environ.get('IMAGE_QUALITY_USE_NO_REFERENCE', 'True'),
+                    'IMAGE_QUALITY_DISCRETIZE_LEVELS': os.environ.get('IMAGE_QUALITY_DISCRETIZE_LEVELS', '0'),
+                    # 奖励权重配置
+                    'FORMAT_REWARD_WEIGHT': os.environ.get('FORMAT_REWARD_WEIGHT', '0.3'),
+                    'QUALITY_REWARD_WEIGHT': os.environ.get('QUALITY_REWARD_WEIGHT', '0.7'),
+                    # 退化类型奖励配置
+                    'ENABLE_DEGRADATION_TYPE_REWARD': os.environ.get('ENABLE_DEGRADATION_TYPE_REWARD', 'False'),
+                    'DEGRADATION_TYPE_REWARD_WEIGHT': os.environ.get('DEGRADATION_TYPE_REWARD_WEIGHT', '1.0'),
+                }
+                
+                # 将奖励配置添加到config中
+                if isinstance(config_with_env, dict):
+                    config_with_env['reward_config'] = reward_config
+                    print(f"[INFO] Added reward config to wandb: {reward_config}")
+                
+                wandb.init(project=project_name, name=experiment_name, config=config_with_env)
+            else:
+                wandb.init(project=project_name, name=experiment_name, config=config)
+            
             self.logger["wandb"] = wandb
             
             # Save config as a yaml file to wandb

@@ -79,11 +79,22 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
     valid_adv = torch.masked_select(advantages, response_mask)
     valid_returns = torch.masked_select(returns, response_mask)
 
+    # 检查是否有有效的response（边界情况保护）
+    has_valid_responses = valid_adv.numel() > 0
+    
+    if not has_valid_responses:
+        print(f"[WARNING] No valid responses in batch! response_mask sum: {response_mask.sum().item()}")
+        print(f"[WARNING] advantages shape: {advantages.shape}, response_mask shape: {response_mask.shape}")
+
     if use_critic:
         values = batch.batch["values"]
         valid_values = torch.masked_select(values, response_mask)
-        return_diff_var = torch.var(valid_returns - valid_values)
-        return_var = torch.var(valid_returns)
+        if has_valid_responses:
+            return_diff_var = torch.var(valid_returns - valid_values)
+            return_var = torch.var(valid_returns)
+        else:
+            return_diff_var = torch.tensor(0.0)
+            return_var = torch.tensor(1.0)
 
     metrics = {
         # score
@@ -94,22 +105,22 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
         "critic/rewards/mean": torch.mean(sequence_reward).detach().item(),
         "critic/rewards/max": torch.max(sequence_reward).detach().item(),
         "critic/rewards/min": torch.min(sequence_reward).detach().item(),
-        # adv
-        "critic/advantages/mean": torch.mean(valid_adv).detach().item(),
-        "critic/advantages/max": torch.max(valid_adv).detach().item(),
-        "critic/advantages/min": torch.min(valid_adv).detach().item(),
-        # returns
-        "critic/returns/mean": torch.mean(valid_returns).detach().item(),
-        "critic/returns/max": torch.max(valid_returns).detach().item(),
-        "critic/returns/min": torch.min(valid_returns).detach().item(),
+        # adv (添加空tensor保护)
+        "critic/advantages/mean": torch.mean(valid_adv).detach().item() if has_valid_responses else 0.0,
+        "critic/advantages/max": torch.max(valid_adv).detach().item() if has_valid_responses else 0.0,
+        "critic/advantages/min": torch.min(valid_adv).detach().item() if has_valid_responses else 0.0,
+        # returns (添加空tensor保护)
+        "critic/returns/mean": torch.mean(valid_returns).detach().item() if has_valid_responses else 0.0,
+        "critic/returns/max": torch.max(valid_returns).detach().item() if has_valid_responses else 0.0,
+        "critic/returns/min": torch.min(valid_returns).detach().item() if has_valid_responses else 0.0,
         **(
             {
-                # values
-                "critic/values/mean": torch.mean(valid_values).detach().item(),
-                "critic/values/max": torch.max(valid_values).detach().item(),
-                "critic/values/min": torch.min(valid_values).detach().item(),
+                # values (添加空tensor保护)
+                "critic/values/mean": torch.mean(valid_values).detach().item() if has_valid_responses else 0.0,
+                "critic/values/max": torch.max(valid_values).detach().item() if has_valid_responses else 0.0,
+                "critic/values/min": torch.min(valid_values).detach().item() if has_valid_responses else 0.0,
                 # vf explained var
-                "critic/vf_explained_var": (1.0 - return_diff_var / (return_var + 1e-5)).detach().item(),
+                "critic/vf_explained_var": (1.0 - return_diff_var / (return_var + 1e-5)).detach().item() if has_valid_responses else 0.0,
             }
             if use_critic
             else {}
@@ -218,7 +229,7 @@ def calc_maj_val(data: list[dict[str, Any]], vote_key: str, val_key: str) -> flo
 
 def compute_reward_component_metrics(reward_extra_infos_dict: dict[str, list]) -> dict[str, float]:
     """
-    计算奖励组成部分的统计指标（只统计格式奖励和图像质量奖励）
+    计算奖励组成部分的统计指标（格式奖励、图像质量奖励、退化类型奖励）
     
     Args:
         reward_extra_infos_dict: 包含各种奖励信息的字典
@@ -239,14 +250,40 @@ def compute_reward_component_metrics(reward_extra_infos_dict: dict[str, list]) -
             metrics['reward/format_violation_ratio'] = format_violation_count / len(format_scores)
             metrics['reward/format_score_mean'] = np.mean(format_scores)
     
-    # 图像质量奖励统计 (accuracy_score: 0.0 - 1.0)
-    if 'ir_accuracy_score' in reward_extra_infos_dict:
-        quality_scores = reward_extra_infos_dict['ir_accuracy_score']
+    # 图像质量奖励统计 (quality_score: 0.0 - 1.0)
+    # 兼容旧字段名 ir_accuracy_score 和新字段名 ir_quality_score
+    quality_score_key = None
+    if 'ir_quality_score' in reward_extra_infos_dict:
+        quality_score_key = 'ir_quality_score'
+    elif 'ir_accuracy_score' in reward_extra_infos_dict:
+        quality_score_key = 'ir_accuracy_score'  # 向后兼容
+    
+    if quality_score_key:
+        quality_scores = reward_extra_infos_dict[quality_score_key]
         if len(quality_scores) > 0:
             metrics['reward/quality_score_mean'] = np.mean(quality_scores)
             metrics['reward/quality_score_max'] = np.max(quality_scores)
             metrics['reward/quality_score_min'] = np.min(quality_scores)
             metrics['reward/quality_score_std'] = np.std(quality_scores)
+    
+    # 退化类型奖励统计 (degradation_type_score: 0.0 - 1.0)
+    if 'ir_degradation_type_score' in reward_extra_infos_dict:
+        degradation_type_scores = reward_extra_infos_dict['ir_degradation_type_score']
+        if len(degradation_type_scores) > 0:
+            # 过滤掉0.0的分数（这些是clean样本或未启用时的默认值）
+            non_zero_scores = [s for s in degradation_type_scores if s > 0.0]
+            
+            if len(non_zero_scores) > 0:
+                # 只对有效样本统计（退化类型奖励启用且非clean样本）
+                metrics['reward/degradation_type_score_mean'] = np.mean(non_zero_scores)
+                metrics['reward/degradation_type_score_max'] = np.max(non_zero_scores)
+                metrics['reward/degradation_type_score_min'] = np.min(non_zero_scores)
+                metrics['reward/degradation_type_score_std'] = np.std(non_zero_scores)
+                metrics['reward/degradation_type_valid_samples'] = len(non_zero_scores)
+                metrics['reward/degradation_type_valid_ratio'] = len(non_zero_scores) / len(degradation_type_scores)
+            
+            # 也记录包含所有样本的统计（包括0分）
+            metrics['reward/degradation_type_score_mean_all'] = np.mean(degradation_type_scores)
     
     return metrics
 

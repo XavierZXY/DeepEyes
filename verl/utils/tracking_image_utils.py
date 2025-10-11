@@ -525,10 +525,13 @@ def log_rollout_images_to_wandb(
                 images_to_log.append(wandb.Image(trajectory_img, caption=caption))
         
         if len(image_histories) > 0:
-            # 直接记录到表格，不需要独立的Media上传
-            print(f"[DEBUG WANDB IMAGE] Logging {len(image_histories)} validation samples to table...")
+            # 上传图像到wandb Media面板
+            if len(images_to_log) > 0:
+                wandb_logger.log({f"{mode}/trajectories": images_to_log}, step=step)
+                print(f"[DEBUG WANDB IMAGE] ✓ Uploaded {len(images_to_log)} images to {mode}/trajectories")
             
-            # 记录到对话表格（包含图片）
+            # 同时记录到对话表格（包含图片）
+            print(f"[DEBUG WANDB IMAGE] Logging {len(image_histories)} validation samples to table...")
             _log_conversation_table(
                 wandb_logger=wandb_logger,
                 image_histories=image_histories,
@@ -537,6 +540,7 @@ def log_rollout_images_to_wandb(
                 conversation_histories=conversation_histories,
                 original_images=original_images,
                 image_quality_scores=image_quality_scores,
+                reward_extra_infos_dict=detailed_metrics,
                 tokenizer=tokenizer,
                 step=step,
                 mode=mode,
@@ -686,10 +690,13 @@ def log_rollout_images_to_wandb(
                 images_to_log.append(wandb.Image(trajectory_img, caption=caption))
         
         if len(selected_indices) > 0:
-            # 直接记录到表格（包含图片）
-            print(f"[DEBUG WANDB IMAGE] Logging {len(selected_indices)} training samples to table...")
+            # 上传图像到wandb Media面板
+            if len(images_to_log) > 0:
+                wandb_logger.log({f"{mode}/trajectories": images_to_log}, step=step)
+                print(f"[DEBUG WANDB IMAGE] ✓ Uploaded {len(images_to_log)} images to {mode}/trajectories")
             
-            # 记录到对话表格
+            # 同时记录到对话表格（包含图片）
+            print(f"[DEBUG WANDB IMAGE] Logging {len(selected_indices)} training samples to table...")
             _log_conversation_table(
                 wandb_logger=wandb_logger,
                 image_histories=image_histories,
@@ -698,6 +705,7 @@ def log_rollout_images_to_wandb(
                 conversation_histories=conversation_histories,
                 original_images=original_images,
                 image_quality_scores=image_quality_scores,
+                reward_extra_infos_dict=detailed_metrics,
                 tokenizer=tokenizer,
                 step=step,
                 mode=mode,
@@ -780,6 +788,7 @@ def _log_conversation_table(
     conversation_histories: List,
     original_images: List,
     image_quality_scores: Optional[List[float]],
+    reward_extra_infos_dict: Optional[Dict[str, List]],
     tokenizer,
     step: int,
     mode: str,
@@ -811,8 +820,9 @@ def _log_conversation_table(
     # 固定最大turn数（避免列数动态变化）
     MAX_TURNS = 5  # 根据max_turns配置调整
     
-    # 创建固定列：基础信息 + 图像轨迹 + 每个turn的think和tools
-    columns = ["Step", "Sample_ID", "Trajectory_Image", "Quality_Score", "Num_Tools", "User_Input"]
+    # 创建固定列：基础信息 + 图像轨迹 + 退化类别 + 工具状态 + 失败原因 + 每个turn的think和tools
+    columns = ["Step", "Sample_ID", "Trajectory_Image", "Quality_Score", "Num_Tools", 
+               "Degradation_Type", "Tool_Status", "Failure_Reason", "User_Input"]
     for turn_idx in range(MAX_TURNS):
         columns.append(f"Turn{turn_idx+1}_Think")
         columns.append(f"Turn{turn_idx+1}_Tools")
@@ -846,6 +856,12 @@ def _log_conversation_table(
         num_tools = 0
         if img_hist is not None and isinstance(img_hist, (list, tuple)):
             num_tools = max(0, len(img_hist) - 1)
+        
+        # 获取退化类别（从reward_extra_infos_dict）
+        degradation_type = "unknown"
+        if reward_extra_infos_dict and 'degradation_type' in reward_extra_infos_dict:
+            if idx < len(reward_extra_infos_dict['degradation_type']):
+                degradation_type = reward_extra_infos_dict['degradation_type'][idx]
         
         # 获取用户输入（增强版，支持多种格式）
         user_input = ""
@@ -891,8 +907,92 @@ def _log_conversation_table(
                 # 转换为wandb.Image对象
                 trajectory_img = wandb.Image(trajectory_img)
         
-        # 构建行数据（添加trajectory_img列）
-        row = [step, f"{mode}_step{step}_idx{idx}", trajectory_img, quality, num_tools, user_input]
+        # 判断工具执行状态和失败原因
+        tool_status = "Unknown"
+        failure_reason = ""
+        has_tool_request = False
+        has_tool_execution = False
+        requested_tool_names = []
+        
+        # 检查是否有工具请求（从conversation_history）
+        if idx < len(conversation_histories) and conversation_histories[idx] is not None:
+            conv_hist = conversation_histories[idx]
+            if isinstance(conv_hist, list) and len(conv_hist) > 0:
+                for turn in conv_hist:
+                    response = turn.get('response', '')
+                    if '<tool_call>' in response and '</tool_call>' in response:
+                        has_tool_request = True
+                        # 提取请求的工具名称
+                        try:
+                            tool_match = re.search(r'<tool_call>(.*?)</tool_call>', response, re.DOTALL)
+                            if tool_match:
+                                tools = json.loads(tool_match.group(1).strip())
+                                if isinstance(tools, list):
+                                    requested_tool_names = [t.get('name', 'unknown') for t in tools if isinstance(t, dict)]
+                        except:
+                            pass
+                        break
+        
+        # 检查是否有工具执行（从image_history）
+        if img_hist is not None and isinstance(img_hist, (list, tuple)) and len(img_hist) > 1:
+            has_tool_execution = True
+        
+        # 判断状态和失败原因
+        if has_tool_request and has_tool_execution:
+            tool_status = "✅ Success"
+            failure_reason = "-"  # 成功，无失败原因
+        elif has_tool_request and not has_tool_execution:
+            tool_status = "⚠️ Requested but Failed"
+            # 分析失败原因
+            failure_reasons = []
+            
+            # 原因1: max_turns限制（最常见）
+            if idx < len(conversation_histories) and conversation_histories[idx] is not None:
+                conv_hist = conversation_histories[idx]
+                if isinstance(conv_hist, list) and len(conv_hist) == 1:
+                    # 只有1轮对话，可能是max_turns=1导致工具来不及执行
+                    failure_reasons.append("max_turns=1 (工具来不及执行)")
+            
+            # 原因2: image_history存在但长度为1（工具被调用但没产生新图像）
+            if img_hist is not None and isinstance(img_hist, (list, tuple)) and len(img_hist) == 1:
+                failure_reasons.append("工具未产生新图像")
+            
+            # 原因3: image_history为None（工具完全没执行）
+            if img_hist is None:
+                failure_reasons.append("image_history为空")
+            
+            # 原因4: 显示请求的工具名称
+            if requested_tool_names:
+                failure_reasons.append(f"请求工具: {', '.join(requested_tool_names)}")
+            
+            # 组合失败原因
+            if failure_reasons:
+                failure_reason = " | ".join(failure_reasons)
+            else:
+                failure_reason = "未知原因"
+        elif not has_tool_request:
+            tool_status = "❌ No Tool Request"
+            # 检查是否直接给了answer
+            failure_reason = ""  # 初始化
+            if idx < len(conversation_histories) and conversation_histories[idx] is not None:
+                conv_hist = conversation_histories[idx]
+                if isinstance(conv_hist, list) and len(conv_hist) > 0:
+                    for turn in conv_hist:
+                        response = turn.get('response', '')
+                        if '<answer>' in response:
+                            failure_reason = "模型直接给出答案，未调用工具"
+                            break
+            # 如果没有找到answer，设置默认原因
+            if not failure_reason:
+                failure_reason = "无工具请求"
+        else:
+            # Unknown状态（理论上不应该到这里）
+            tool_status = "❓ Unknown"
+            failure_reason = "状态未知 (请检查日志)"
+        
+        # 构建行数据（添加degradation_type、tool_status和failure_reason列）
+        row = [step, f"{mode}_step{step}_idx{idx}", trajectory_img, quality, num_tools, 
+               degradation_type, tool_status, failure_reason, user_input]
         
         # 提取每个turn的内容
         turn_data = {}
@@ -915,13 +1015,19 @@ def _log_conversation_table(
                     if think_match:
                         think_text = think_match.group(1).strip()
                     
-                    # 提取tools（完整JSON）
+                    # 提取tools（完整JSON或answer内容）
                     tools_text = ""
                     tool_match = re.search(r'<tool_call>(.*?)</tool_call>', response, re.DOTALL)
                     if tool_match:
                         tools_text = tool_match.group(1).strip()
                     elif '<answer>' in response:
-                        tools_text = "[ANSWER]"
+                        # 提取完整的answer内容
+                        answer_match = re.search(r'<answer>(.*?)</answer>', response, re.DOTALL)
+                        if answer_match:
+                            answer_content = answer_match.group(1).strip()
+                            tools_text = f"<answer>{answer_content}</answer>"
+                        else:
+                            tools_text = "<answer>[Empty]</answer>"
                     
                     turn_data[turn_num] = {
                         'think': think_text,
@@ -959,13 +1065,19 @@ def _log_conversation_table(
                     think_match = re.search(r'<think>(.*?)</think>', turn_content, re.DOTALL)
                     think_text = think_match.group(1).strip() if think_match else ""
                     
-                    # 提取tools
+                    # 提取tools（完整JSON或answer内容）
                     tools_text = ""
                     tool_match = re.search(r'<tool_call>(.*?)</tool_call>', turn_content, re.DOTALL)
                     if tool_match:
                         tools_text = tool_match.group(1).strip()
                     elif '<answer>' in turn_content:
-                        tools_text = "[ANSWER]"
+                        # 提取完整的answer内容
+                        answer_match = re.search(r'<answer>(.*?)</answer>', turn_content, re.DOTALL)
+                        if answer_match:
+                            answer_content = answer_match.group(1).strip()
+                            tools_text = f"<answer>{answer_content}</answer>"
+                        else:
+                            tools_text = "<answer>[Empty]</answer>"
                     
                     turn_data[turn_num] = {'think': think_text, 'tools': tools_text}
                 
@@ -986,7 +1098,7 @@ def _log_conversation_table(
         
         # 调试：打印第一行的内容
         if idx == 0:
-            print(f"[DEBUG CONV TABLE] First row data: quality={quality}, num_tools={num_tools}, user_input_len={len(user_input)}, turn_data_count={len(turn_data)}, total_cols={len(row)}")
+            print(f"[DEBUG CONV TABLE] First row data: quality={quality}, num_tools={num_tools}, degradation={degradation_type}, tool_status={tool_status}, failure_reason={failure_reason}, user_input_len={len(user_input)}, turn_data_count={len(turn_data)}, total_cols={len(row)}")
         
         new_table.add_data(*row)
         rows_added += 1
