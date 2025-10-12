@@ -133,7 +133,7 @@ class NaiveRewardManager:
             # 为所有样本添加统计标志（确保批次大小一致性）
             reward_value = score if isinstance(score, (int, float)) else score.get("score", 0.0)
             
-            # 为图像复原任务设置特殊标志，其他任务设置默认值
+            # 为图像复原任务和缺陷检测任务设置特殊标志
             if data_source in ["image_restoration_v2"]:
                 image_processing_stats['image_restoration_v2_samples'] += 1
                 reward_extra_info['ir_has_processed_image'].append(1.0 if has_processed_image else 0.0)
@@ -146,50 +146,36 @@ class NaiveRewardManager:
                     degradation_score = score.get("degradation_order_score", 0.0)
                     format_score = score.get("format_score", 0.0)
                     accuracy_score = score.get("accuracy_score", 0.0)
-                    
-                    # 检查是否为clean样本
-                    is_clean_sample = score.get("is_clean_sample", 0.0)
-                    reward_extra_info['ir_is_clean_sample'].append(is_clean_sample)
-                    
-                    # 只对clean样本收集clean_accuracy，但为了保持数组长度一致，
-                    # 我们需要为所有样本都添加clean_accuracy（非clean样本设为-1表示不适用）
-                    if is_clean_sample > 0:
-                        clean_accuracy = score.get("clean_accuracy", 0.0)
-                        reward_extra_info['ir_clean_accuracy'].append(clean_accuracy)
-                    else:
-                        # 非clean样本设为-1，表示不适用（在metric_utils中会被过滤掉）
-                        reward_extra_info['ir_clean_accuracy'].append(-1.0)
-                        
-                    # 添加格式奖励和准确性奖励的单独统计
-                    reward_extra_info['ir_format_score'].append(format_score)
-                    reward_extra_info['ir_accuracy_score'].append(accuracy_score)
-                    
-                    # 添加图像质量分数（新字段名，与accuracy_score相同但语义更清晰）
-                    quality_score = score.get("quality_score", accuracy_score)
-                    reward_extra_info['ir_quality_score'].append(quality_score)
-                    
-                    # 添加退化类型分数（用于统计mean/min/max/std）
-                    degradation_type_score = score.get("degradation_type_score", 0.0)
-                    reward_extra_info['ir_degradation_type_score'].append(degradation_type_score)
-                    
-                    # 添加退化类型信息（用于wandb展示）
-                    degradation_type = score.get("degradation_type", "unknown")
-                    reward_extra_info['degradation_type'].append(degradation_type)
-                    # 如果有完整的退化类型列表也保存
-                    if "degradation_types_all" in score:
-                        reward_extra_info['degradation_types_all'].append(score.get("degradation_types_all"))
+            
+            elif data_source in ["visual_toolbox_v2", "vstar_visual_toolbox_v2"]:
+                # 数据集2：缺陷检测任务
+                image_processing_stats['image_restoration_v2_samples'] += 1  # 复用统计字段
+                reward_extra_info['ir_has_processed_image'].append(1.0 if has_processed_image else 0.0)
+                reward_extra_info['ir_quality_reward_zero'].append(1.0 if reward_value == 0.0 else 0.0)
+                reward_extra_info['ir_quality_reward_positive'].append(1.0 if reward_value > 0.0 else 0.0)
+                reward_extra_info['ir_total_reward_value'].append(reward_value)
+                
+                # 数据集2特有指标
+                if isinstance(score, dict):
+                    format_score = score.get("format_reward", 0.0)  # -1 或 1
+                    accuracy_score = score.get("acc_reward", 0.0)   # 0 或 1
+                    degradation_score = 0.0  # 数据集2不使用退化类型
                 else:
+                    format_score = 0.0
+                    accuracy_score = 0.0
                     degradation_score = 0.0
-                    reward_extra_info['ir_is_clean_sample'].append(0.0)
-                    reward_extra_info['ir_clean_accuracy'].append(-1.0)
-                    reward_extra_info['ir_format_score'].append(0.0)
-                    reward_extra_info['ir_accuracy_score'].append(0.0)
-                    reward_extra_info['ir_quality_score'].append(0.0)
-                    reward_extra_info['ir_degradation_type_score'].append(0.0)
-                    reward_extra_info['degradation_type'].append("unknown")
+                
+                # 为了与数据集1兼容，添加所有字段（数据集2不使用这些）
+                reward_extra_info['ir_is_clean_sample'].append(0.0)  # 数据集2无clean概念
+                reward_extra_info['ir_clean_accuracy'].append(-1.0)
+                reward_extra_info['ir_format_score'].append(format_score)
+                reward_extra_info['ir_accuracy_score'].append(accuracy_score)
+                reward_extra_info['ir_quality_score'].append(accuracy_score)  # 数据集2的质量就是accuracy
+                reward_extra_info['ir_degradation_type_score'].append(0.0)
+                reward_extra_info['degradation_type'].append("defect_detection")  # 标记为缺陷检测任务
                 reward_extra_info['ir_degradation_order_score'].append(degradation_score)
                 
-                # 统计总奖励分数（包含格式+图像质量）
+                # 统计总奖励分数
                 if reward_value == 0.0:
                     image_processing_stats['image_quality_reward_zero_count'] += 1
                 else:
@@ -212,8 +198,16 @@ class NaiveRewardManager:
                 reward = score["score"]
                 # Store the information including original reward
                 # 跳过已经在图像复原任务中特殊处理过的键，避免重复添加
-                skip_keys = {'degradation_type', 'degradation_types_all', 'degradation_order_score', 
-                            'format_score', 'accuracy_score', 'is_clean_sample', 'clean_accuracy'} if data_source in ["image_restoration_v2"] else set()
+                if data_source in ["image_restoration_v2"]:
+                    skip_keys = {'degradation_type', 'degradation_types_all', 'degradation_order_score', 
+                                'format_score', 'accuracy_score', 'is_clean_sample', 'clean_accuracy'}
+                elif data_source in ["visual_toolbox_v2", "vstar_visual_toolbox_v2"]:
+                    # 数据集2：需要添加format_reward和acc_reward到reward_extra_info以便wandb显示
+                    # 但不跳过，让它们通过下面的循环添加
+                    skip_keys = {'format_errors_count'}  # 只跳过不需要的字段
+                else:
+                    skip_keys = set()
+                    
                 for key, value in score.items():
                     if key not in skip_keys:
                         reward_extra_info[key].append(value)

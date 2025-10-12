@@ -118,6 +118,17 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
         # - use_no_reference=True (默认): 使用无参考指标，适合训练，所有样本都能计算
         # - use_no_reference=False: 使用有参考指标，需要original_image，只对工具执行的样本有效
         # - Wandb展示时会按需计算有参考指标用于可视化
+    
+    elif data_source in ["visual_toolbox_v2", "defect_detection", "vstar_visual_toolbox_v2"]:
+        from . import visual_toolbox_v2_reward
+        
+        print(f"[INFO] Using visual_toolbox_v2 reward (format: -1/1, accuracy: 0/1)")
+        res = visual_toolbox_v2_reward.compute_visual_toolbox_v2_score(
+            data_source,
+            solution_str,
+            ground_truth,
+            extra_info
+        )
 
     else:
         raise NotImplementedError(f"Reward function is not implemented for {data_source=}")

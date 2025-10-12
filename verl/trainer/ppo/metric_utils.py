@@ -230,6 +230,7 @@ def calc_maj_val(data: list[dict[str, Any]], vote_key: str, val_key: str) -> flo
 def compute_reward_component_metrics(reward_extra_infos_dict: dict[str, list]) -> dict[str, float]:
     """
     计算奖励组成部分的统计指标（格式奖励、图像质量奖励、退化类型奖励）
+    支持数据集1 (image_restoration) 和数据集2 (visual_toolbox_v2)
     
     Args:
         reward_extra_infos_dict: 包含各种奖励信息的字典
@@ -239,9 +240,15 @@ def compute_reward_component_metrics(reward_extra_infos_dict: dict[str, list]) -
     """
     metrics = {}
     
-    # 格式奖励统计 (format_score: -1.0 或 1.0)
+    # 格式奖励统计 - 支持数据集1 (ir_format_score) 和数据集2 (format_reward)
+    format_score_key = None
     if 'ir_format_score' in reward_extra_infos_dict:
-        format_scores = reward_extra_infos_dict['ir_format_score']
+        format_score_key = 'ir_format_score'  # 数据集1
+    elif 'format_reward' in reward_extra_infos_dict:
+        format_score_key = 'format_reward'  # 数据集2
+    
+    if format_score_key:
+        format_scores = reward_extra_infos_dict[format_score_key]
         if len(format_scores) > 0:
             # 计算格式正确率（format_score = 1.0 的比例）
             format_correct_count = sum(1 for s in format_scores if s == 1.0)
@@ -250,21 +257,28 @@ def compute_reward_component_metrics(reward_extra_infos_dict: dict[str, list]) -
             metrics['reward/format_violation_ratio'] = format_violation_count / len(format_scores)
             metrics['reward/format_score_mean'] = np.mean(format_scores)
     
-    # 图像质量奖励统计 (quality_score: 0.0 - 1.0)
-    # 兼容旧字段名 ir_accuracy_score 和新字段名 ir_quality_score
+    # 准确性奖励统计 - 支持数据集1 (quality_score) 和数据集2 (acc_reward)
+    # 数据集1: ir_quality_score / ir_accuracy_score (图像质量: 0.0 - 1.0)
+    # 数据集2: acc_reward (答案准确性: 0.0 或 1.0)
     quality_score_key = None
     if 'ir_quality_score' in reward_extra_infos_dict:
-        quality_score_key = 'ir_quality_score'
+        quality_score_key = 'ir_quality_score'  # 数据集1
     elif 'ir_accuracy_score' in reward_extra_infos_dict:
-        quality_score_key = 'ir_accuracy_score'  # 向后兼容
+        quality_score_key = 'ir_accuracy_score'  # 数据集1 (向后兼容)
+    elif 'acc_reward' in reward_extra_infos_dict:
+        quality_score_key = 'acc_reward'  # 数据集2
     
     if quality_score_key:
         quality_scores = reward_extra_infos_dict[quality_score_key]
         if len(quality_scores) > 0:
-            metrics['reward/quality_score_mean'] = np.mean(quality_scores)
-            metrics['reward/quality_score_max'] = np.max(quality_scores)
-            metrics['reward/quality_score_min'] = np.min(quality_scores)
-            metrics['reward/quality_score_std'] = np.std(quality_scores)
+            metrics['reward/accuracy_mean'] = np.mean(quality_scores)
+            metrics['reward/accuracy_max'] = np.max(quality_scores)
+            metrics['reward/accuracy_min'] = np.min(quality_scores)
+            metrics['reward/accuracy_std'] = np.std(quality_scores)
+            # 添加准确率（对于数据集2特别重要）
+            if quality_score_key == 'acc_reward':
+                correct_count = sum(1 for s in quality_scores if s == 1.0)
+                metrics['reward/accuracy_ratio'] = correct_count / len(quality_scores)
     
     # 退化类型奖励统计 (degradation_type_score: 0.0 - 1.0)
     if 'ir_degradation_type_score' in reward_extra_infos_dict:

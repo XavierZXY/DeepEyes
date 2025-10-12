@@ -753,9 +753,13 @@ class RayPPOTrainer:
                     pfx = f"{metric_sec}/{data_source}/{var_name}/{metric_name}"
                     metric_dict[pfx] = metric_val
         
-        # 在统计之前，先计算有参考指标（如果需要图像上传）
+        # 在统计之前，先计算有参考指标（仅数据集1需要，数据集2跳过）
+        # 数据集1有'degradation_type'字段，数据集2有'format_reward'字段
+        is_image_restoration = reward_extra_infos_dict and 'degradation_type' in reward_extra_infos_dict
+        is_visual_toolbox_v2 = reward_extra_infos_dict and 'format_reward' in reward_extra_infos_dict
+        
         if hasattr(self, 'logger') and 'wandb' in self.logger.logger and self.config.trainer.get('log_images_to_wandb', True):
-            if len(val_image_histories) > 0:
+            if len(val_image_histories) > 0 and is_image_restoration:  # 只在数据集1时计算有参考指标
                 try:
                     # Prepare batch data with all needed fields
                     val_batch_data = {
@@ -776,6 +780,8 @@ class RayPPOTrainer:
                     print(f"[DEBUG VAL REF METRICS] Added reference metrics to reward_extra_infos_dict")
                 except Exception as e:
                     print(f"[WARNING] Failed to compute reference metrics for validation: {e}")
+            elif is_visual_toolbox_v2:
+                print(f"[DEBUG VAL] Skipping reference metrics calculation for visual_toolbox_v2 dataset")
         
         # 收集验证集的奖励组成部分统计指标（现在包含有参考指标）
         if reward_extra_infos_dict:
@@ -809,11 +815,13 @@ class RayPPOTrainer:
                     # Extract image quality scores from reward_extra_infos_dict
                     image_quality_scores = extract_image_quality_scores_from_rewards(reward_extra_infos_dict)
                     
-                    # Extract detailed metrics from reward_extra_infos_dict（包含无参考和有参考指标）
+                    # Extract detailed metrics from reward_extra_infos_dict
+                    # 支持数据集1和数据集2的不同指标
                     val_detailed_metrics = {}
-                    for key in ['niqe_score', 'brisque_score', 'cpbd_score', 'clip_iqa_score', 'hyper_iqa_score',  # 无参考指标
-                               'image_quality_reward_continuous', 'mode', 'degradation_type', 'degradation_types_all',  # 退化类型信息
-                               'ssim_score_ref', 'lpips_score_ref', 'psnr_score_ref']:  # 有参考指标
+                    for key in ['niqe_score', 'brisque_score', 'cpbd_score', 'clip_iqa_score', 'hyper_iqa_score',  # 无参考指标（数据集1）
+                               'image_quality_reward_continuous', 'mode', 'degradation_type', 'degradation_types_all',  # 退化类型信息（数据集1）
+                               'ssim_score_ref', 'lpips_score_ref', 'psnr_score_ref',  # 有参考指标（数据集1）
+                               'format_reward', 'acc_reward', 'format_errors_count']:  # 数据集2指标
                         if key in reward_extra_infos_dict:
                             val_detailed_metrics[key] = reward_extra_infos_dict[key]
                     
@@ -1282,10 +1290,13 @@ class RayPPOTrainer:
                 if self.config.actor_rollout_ref.rollout.agent.activate_agent:
                     metrics.update(compute_agent_metrics(batch=batch))
                 
-                # 在统计之前，先计算有参考指标（如果需要图像上传）
-                # 这样确保统计时包含完整的指标数据
+                # 在统计之前，先计算有参考指标（仅数据集1需要，数据集2跳过）
+                # 数据集1有'degradation_type'字段，数据集2有'format_reward'字段
+                is_image_restoration_train = reward_extra_infos_dict and 'degradation_type' in reward_extra_infos_dict
+                is_visual_toolbox_v2_train = reward_extra_infos_dict and 'format_reward' in reward_extra_infos_dict
+                
                 if 'wandb' in logger.logger and self.config.trainer.get('log_images_to_wandb', True):
-                    if reward_extra_infos_dict:
+                    if reward_extra_infos_dict and is_image_restoration_train:  # 只在数据集1时计算有参考指标
                         try:
                             # Prepare batch data with all needed fields
                             # Note: image_history_list is added by agent_rollout_loop in parallel_env.py
@@ -1308,6 +1319,8 @@ class RayPPOTrainer:
                             print(f"[DEBUG TRAIN REF METRICS] Added reference metrics to reward_extra_infos_dict")
                         except Exception as e:
                             print(f"[WARNING] Failed to compute reference metrics for training: {e}")
+                    elif is_visual_toolbox_v2_train:
+                        print(f"[DEBUG TRAIN] Skipping reference metrics calculation for visual_toolbox_v2 dataset")
                 
                 # 收集奖励组成部分的统计指标（现在包含有参考指标）
                 if reward_extra_infos_dict:
@@ -1338,11 +1351,13 @@ class RayPPOTrainer:
                         if len(batch_data['original_images']) > 0:
                             print(f"[DEBUG WANDB IMAGE] original_images[0] type: {type(batch_data['original_images'][0])}, is None: {batch_data['original_images'][0] is None}")
                         
-                        # Extract detailed metrics from reward_extra_infos_dict（包含无参考和有参考指标）
+                        # Extract detailed metrics from reward_extra_infos_dict
+                        # 支持数据集1和数据集2的不同指标
                         detailed_metrics = {}
-                        for key in ['niqe_score', 'brisque_score', 'cpbd_score', 'clip_iqa_score', 'hyper_iqa_score',  # 无参考指标
-                                   'image_quality_reward_continuous', 'mode', 'degradation_type', 'degradation_types_all',  # 退化类型信息
-                                   'ssim_score_ref', 'lpips_score_ref', 'psnr_score_ref']:  # 有参考指标
+                        for key in ['niqe_score', 'brisque_score', 'cpbd_score', 'clip_iqa_score', 'hyper_iqa_score',  # 无参考指标（数据集1）
+                                   'image_quality_reward_continuous', 'mode', 'degradation_type', 'degradation_types_all',  # 退化类型信息（数据集1）
+                                   'ssim_score_ref', 'lpips_score_ref', 'psnr_score_ref',  # 有参考指标（数据集1）
+                                   'format_reward', 'acc_reward', 'format_errors_count']:  # 数据集2指标
                             if key in reward_extra_infos_dict:
                                 detailed_metrics[key] = reward_extra_infos_dict[key]
                         

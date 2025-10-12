@@ -64,7 +64,10 @@ class VisualToolBoxV2(ToolBase):
         if not action:
             return "", 0.0, True, {}
         try:
-            tool_call = json.loads(action.strip())  # 或使用 literal_eval
+            tool_call = json.loads(action.strip())
+            # 支持两种格式：列表格式 [{"name": "...", "arguments": {...}}] 或字典格式 {"name": "...", "arguments": {...}}
+            if isinstance(tool_call, list) and len(tool_call) > 0:
+                tool_call = tool_call[0]  # 取第一个工具
         except Exception as e:
             error_msg = f"Invalid tool call format: {action.strip()}. Error: {e}"
             obs = "\n<|im_start|>user\n" + f"Error: {str(error_msg)}" + "<|im_end|>\n<|im_start|>assistant\n"
@@ -77,22 +80,22 @@ class VisualToolBoxV2(ToolBase):
         
             if tool_name == "image_zoom_in_tool":
                 # Zoom in by cropping the image
-                # image_path = args["image_path"]
+                # 始终从原始输入图开始处理（数据集2要求）
                 bbox = args["bbox_2d"]
                 bbox = self.maybe_resize_bbox(*bbox)
                 if not bbox:
                     raise ValueError(f"ZOOM IN ARGUMENTS ARE INVALID")
-                # img = Image.open(image_path)
-                img = self.multi_modal_data['image'][0]
+                # 使用原始输入图，而不是上一个工具处理后的图
+                img = self.origin_multi_modal_data['image'][0]
                 cropped_img = img.crop(bbox)
                 current_image = cropped_img
                 
             elif tool_name == "image_rotate_tool":
                 # Rotate the image
-                # image_path = args["image_path"]
+                # 始终从原始输入图开始处理（数据集2要求）
                 angle = args["angle"]
-                # img = Image.open(image_path)
-                img = self.multi_modal_data['image'][0]
+                # 使用原始输入图，而不是上一个工具处理后的图
+                img = self.origin_multi_modal_data['image'][0]
                 rotated_img = img.rotate(angle)
                 current_image = rotated_img
                 
@@ -119,8 +122,9 @@ class VisualToolBoxV2(ToolBase):
 
     def reset(self, raw_prompt, multi_modal_data, origin_multi_modal_data, **kwargs):
         self.chatml_history = raw_prompt
-        # 使用当前处理后的图片，而不是原始图片
-        self.multi_modal_data = multi_modal_data if multi_modal_data else origin_multi_modal_data
+        # 数据集2要求：工具始终处理原始输入图，不使用上一个工具处理后的图
+        self.multi_modal_data = origin_multi_modal_data
+        self.origin_multi_modal_data = origin_multi_modal_data  # 保存原始图像引用
         assert 'image' in self.multi_modal_data.keys(), f'[ERROR] {self.multi_modal_data=}'
         assert len(self.multi_modal_data['image']) > 0, f'[ERROR] {self.multi_modal_data["image"]=}'
         

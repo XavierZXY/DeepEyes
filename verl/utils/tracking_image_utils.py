@@ -483,18 +483,17 @@ def log_rollout_images_to_wandb(
                 if image_quality_scores is not None and idx < len(image_quality_scores):
                     caption += f" | Quality: {image_quality_scores[idx]:.3f}"
                 
-                # 添加详细指标到caption（有参考和无参考都显示）
+                # 添加详细指标到caption（根据数据集类型）
                 if detailed_metrics:
-                    # Debug: 打印前3个样本的指标值
-                    if idx < 3:
-                        print(f"[DEBUG CAPTION] Sample {idx}: Building caption with detailed_metrics")
-                        if 'ssim_score_ref' in detailed_metrics:
-                            print(f"[DEBUG CAPTION] Sample {idx}: ssim_score_ref[{idx}] = {detailed_metrics['ssim_score_ref'][idx] if idx < len(detailed_metrics['ssim_score_ref']) else 'OUT OF RANGE'}")
-                        if 'lpips_score_ref' in detailed_metrics:
-                            print(f"[DEBUG CAPTION] Sample {idx}: lpips_score_ref[{idx}] = {detailed_metrics['lpips_score_ref'][idx] if idx < len(detailed_metrics['lpips_score_ref']) else 'OUT OF RANGE'}")
-                        if 'psnr_score_ref' in detailed_metrics:
-                            print(f"[DEBUG CAPTION] Sample {idx}: psnr_score_ref[{idx}] = {detailed_metrics['psnr_score_ref'][idx] if idx < len(detailed_metrics['psnr_score_ref']) else 'OUT OF RANGE'}")
+                    # 数据集2：显示format和acc_reward
+                    if 'format_reward' in detailed_metrics and idx < len(detailed_metrics['format_reward']):
+                        fmt_val = detailed_metrics['format_reward'][idx]
+                        caption += f" | Format: {fmt_val:.1f}"
+                    if 'acc_reward' in detailed_metrics and idx < len(detailed_metrics['acc_reward']):
+                        acc_val = detailed_metrics['acc_reward'][idx]
+                        caption += f" | Acc: {acc_val:.1f}"
                     
+                    # 数据集1：显示图像质量指标
                     # 退化类型（优先显示）
                     if 'degradation_type' in detailed_metrics and idx < len(detailed_metrics['degradation_type']):
                         deg_type = detailed_metrics['degradation_type'][idx]
@@ -503,18 +502,12 @@ def log_rollout_images_to_wandb(
                     if 'ssim_score_ref' in detailed_metrics and idx < len(detailed_metrics['ssim_score_ref']):
                         ssim_val = detailed_metrics['ssim_score_ref'][idx]
                         caption += f" | SSIM: {ssim_val:.3f}"
-                        if idx < 3:
-                            print(f"[DEBUG CAPTION] Sample {idx}: Added SSIM={ssim_val:.3f} to caption")
                     if 'lpips_score_ref' in detailed_metrics and idx < len(detailed_metrics['lpips_score_ref']):
                         lpips_val = detailed_metrics['lpips_score_ref'][idx]
                         caption += f" | LPIPS: {lpips_val:.3f}"
-                        if idx < 3:
-                            print(f"[DEBUG CAPTION] Sample {idx}: Added LPIPS={lpips_val:.3f} to caption")
                     if 'psnr_score_ref' in detailed_metrics and idx < len(detailed_metrics['psnr_score_ref']):
                         psnr_val = detailed_metrics['psnr_score_ref'][idx]
                         caption += f" | PSNR: {psnr_val:.1f}"
-                        if idx < 3:
-                            print(f"[DEBUG CAPTION] Sample {idx}: Added PSNR={psnr_val:.1f} to caption")
                     # 无参考指标
                     if 'niqe_score' in detailed_metrics and idx < len(detailed_metrics['niqe_score']):
                         caption += f" | NIQE: {detailed_metrics['niqe_score'][idx]:.2f}"
@@ -653,18 +646,17 @@ def log_rollout_images_to_wandb(
                     elif idx in best_samples:
                         caption += " [BEST]"
                 
-                # 添加详细指标到caption（显示有参考和无参考）
+                # 添加详细指标到caption（根据数据集类型）
                 if detailed_metrics:
-                    # Debug: 对于worst和best样本打印指标值
-                    if idx in (worst_samples + best_samples):
-                        print(f"[DEBUG TRAIN CAPTION] Sample {idx}: Building caption with detailed_metrics")
-                        if 'ssim_score_ref' in detailed_metrics and idx < len(detailed_metrics['ssim_score_ref']):
-                            print(f"[DEBUG TRAIN CAPTION] Sample {idx}: ssim_score_ref[{idx}] = {detailed_metrics['ssim_score_ref'][idx]}")
-                        if 'lpips_score_ref' in detailed_metrics and idx < len(detailed_metrics['lpips_score_ref']):
-                            print(f"[DEBUG TRAIN CAPTION] Sample {idx}: lpips_score_ref[{idx}] = {detailed_metrics['lpips_score_ref'][idx]}")
-                        if 'psnr_score_ref' in detailed_metrics and idx < len(detailed_metrics['psnr_score_ref']):
-                            print(f"[DEBUG TRAIN CAPTION] Sample {idx}: psnr_score_ref[{idx}] = {detailed_metrics['psnr_score_ref'][idx]}")
+                    # 数据集2：显示format和acc_reward
+                    if 'format_reward' in detailed_metrics and idx < len(detailed_metrics['format_reward']):
+                        fmt_val = detailed_metrics['format_reward'][idx]
+                        caption += f" | Format: {fmt_val:.1f}"
+                    if 'acc_reward' in detailed_metrics and idx < len(detailed_metrics['acc_reward']):
+                        acc_val = detailed_metrics['acc_reward'][idx]
+                        caption += f" | Acc: {acc_val:.1f}"
                     
+                    # 数据集1：显示图像质量指标
                     # 退化类型（优先显示）
                     if 'degradation_type' in detailed_metrics and idx < len(detailed_metrics['degradation_type']):
                         deg_type = detailed_metrics['degradation_type'][idx]
@@ -683,9 +675,6 @@ def log_rollout_images_to_wandb(
                     if 'niqe_score' in detailed_metrics and idx < len(detailed_metrics['niqe_score']):
                         niqe_val = detailed_metrics['niqe_score'][idx]
                         caption += f" | NIQE: {niqe_val:.2f}"
-                    
-                    if idx in (worst_samples + best_samples):
-                        print(f"[DEBUG TRAIN CAPTION] Sample {idx}: Final caption = {caption}")
                 
                 images_to_log.append(wandb.Image(trajectory_img, caption=caption))
         
@@ -820,9 +809,25 @@ def _log_conversation_table(
     # 固定最大turn数（避免列数动态变化）
     MAX_TURNS = 5  # 根据max_turns配置调整
     
-    # 创建固定列：基础信息 + 图像轨迹 + 退化类别 + 预测退化类型 + 预测是否正确 + 工具状态 + 失败原因 + 每个turn的think和tools
-    columns = ["Step", "Sample_ID", "Trajectory_Image", "Quality_Score", "Num_Tools", 
-               "Degradation_Type", "Predicted_Degradation_Type", "Prediction_Match", "Tool_Status", "Failure_Reason", "User_Input"]
+    # 检测数据集类型（通过reward_extra_infos_dict中的键）
+    is_image_restoration = reward_extra_infos_dict and 'degradation_type' in reward_extra_infos_dict
+    is_visual_toolbox_v2 = reward_extra_infos_dict and 'format_reward' in reward_extra_infos_dict
+    
+    # 创建固定列：基础信息 + reward组件 + 工具状态 + 每个turn的think和tools
+    columns = ["Step", "Sample_ID", "Trajectory_Image", "Total_Score", "Num_Tools"]
+    
+    # 添加reward组件列（根据数据集类型）
+    if is_visual_toolbox_v2:
+        # 数据集2：format和accuracy
+        columns.extend(["Format_Reward", "Acc_Reward"])
+    elif is_image_restoration:
+        # 数据集1：quality、degradation type等
+        columns.extend(["Quality_Score", "Degradation_Type", "Predicted_Degradation_Type", "Prediction_Match"])
+    
+    # 通用列
+    columns.extend(["Tool_Status", "Failure_Reason", "User_Input"])
+    
+    # 每个turn的think和tools
     for turn_idx in range(MAX_TURNS):
         columns.append(f"Turn{turn_idx+1}_Think")
         columns.append(f"Turn{turn_idx+1}_Tools")
@@ -847,104 +852,124 @@ def _log_conversation_table(
         # 获取图片历史（可能为None）
         img_hist = image_histories[idx] if idx < len(image_histories) else None
         
-        # 获取质量分数
-        quality = 0.0
-        if image_quality_scores is not None and idx < len(image_quality_scores):
-            quality = float(image_quality_scores[idx])
+        # 获取总分（从reward_extra_infos_dict或image_quality_scores）
+        total_score = 0.0
+        if reward_extra_infos_dict and 'score' in reward_extra_infos_dict and idx < len(reward_extra_infos_dict['score']):
+            total_score = float(reward_extra_infos_dict['score'][idx])
+        elif image_quality_scores is not None and idx < len(image_quality_scores):
+            total_score = float(image_quality_scores[idx])
         
         # 统计工具数量（如果没有图片历史则为0）
         num_tools = 0
         if img_hist is not None and isinstance(img_hist, (list, tuple)):
             num_tools = max(0, len(img_hist) - 1)
         
-        # 获取退化类别（从reward_extra_infos_dict - Ground Truth）
-        degradation_type = "unknown"
-        if reward_extra_infos_dict and 'degradation_type' in reward_extra_infos_dict:
-            if idx < len(reward_extra_infos_dict['degradation_type']):
-                degradation_type = reward_extra_infos_dict['degradation_type'][idx]
+        # 获取reward组件（根据数据集类型）
+        format_reward = None
+        acc_reward = None
+        degradation_type = None
+        predicted_degradation_type_str = None
+        prediction_match = None
         
-        # 提取预测的退化类型（从conversation_history中的tool_call）
-        predicted_degradation_types = []
-        if idx < len(conversation_histories) and conversation_histories[idx] is not None:
-            conv_hist = conversation_histories[idx]
-            if isinstance(conv_hist, list):
-                # 导入映射函数
-                try:
-                    from verl.utils.reward_score.tool_to_degradation_mapping import get_degradation_type_from_tool
-                except ImportError:
-                    # 如果导入失败，使用内联映射
-                    def get_degradation_type_from_tool(tool_name):
-                        tool_map = {
-                            "swinir_denoising": "noise", "mprnet_denoising": "noise",
-                            "restormer_motion_deblurring": "motion blur", "mprnet_motion_deblurring": "motion blur",
-                            "xrestormer_motion_deblurring": "motion blur", "restormer_defocus_deblurring": "defocus blur",
-                            "drbnet_defocus_deblurring": "defocus blur", "restormer_deraining": "rain",
-                            "mprnet_deraining": "rain", "xrestormer_deraining": "rain",
-                            "swinir_jpeg_artifact_removal": "jpeg compression artifact",
-                            "fbcnn_jpeg_artifact_removal": "jpeg compression artifact",
-                            "swinir_super_resolution": "low resolution", "dehazeformer_dehaze": "haze",
-                            "constant_shift": "dark", "gamma_correction": "dark", "histogram_equalization": "dark",
-                        }
-                        return tool_map.get(tool_name, None)
+        if is_visual_toolbox_v2:
+            # 数据集2：提取format和acc_reward
+            if reward_extra_infos_dict:
+                if 'format_reward' in reward_extra_infos_dict and idx < len(reward_extra_infos_dict['format_reward']):
+                    format_reward = float(reward_extra_infos_dict['format_reward'][idx])
+                if 'acc_reward' in reward_extra_infos_dict and idx < len(reward_extra_infos_dict['acc_reward']):
+                    acc_reward = float(reward_extra_infos_dict['acc_reward'][idx])
+        
+        elif is_image_restoration:
+            # 数据集1：提取质量分数和退化类型
+            quality = 0.0
+            if image_quality_scores is not None and idx < len(image_quality_scores):
+                quality = float(image_quality_scores[idx])
+            
+            # 获取退化类别（从reward_extra_infos_dict - Ground Truth）
+            degradation_type = "unknown"
+            if reward_extra_infos_dict and 'degradation_type' in reward_extra_infos_dict:
+                if idx < len(reward_extra_infos_dict['degradation_type']):
+                    degradation_type = reward_extra_infos_dict['degradation_type'][idx]
+        
+        # 数据集1：提取预测的退化类型（从conversation_history中的tool_call）
+        if is_image_restoration:
+            predicted_degradation_types = []
+            if idx < len(conversation_histories) and conversation_histories[idx] is not None:
+                conv_hist = conversation_histories[idx]
+                if isinstance(conv_hist, list):
+                    # 导入映射函数
+                    try:
+                        from verl.utils.reward_score.tool_to_degradation_mapping import get_degradation_type_from_tool
+                    except ImportError:
+                        # 如果导入失败，使用内联映射
+                        def get_degradation_type_from_tool(tool_name):
+                            tool_map = {
+                                "swinir_denoising": "noise", "mprnet_denoising": "noise",
+                                "restormer_motion_deblurring": "motion blur", "mprnet_motion_deblurring": "motion blur",
+                                "xrestormer_motion_deblurring": "motion blur", "restormer_defocus_deblurring": "defocus blur",
+                                "drbnet_defocus_deblurring": "defocus blur", "restormer_deraining": "rain",
+                                "mprnet_deraining": "rain", "xrestormer_deraining": "rain",
+                                "swinir_jpeg_artifact_removal": "jpeg compression artifact",
+                                "fbcnn_jpeg_artifact_removal": "jpeg compression artifact",
+                                "swinir_super_resolution": "low resolution", "dehazeformer_dehaze": "haze",
+                                "constant_shift": "dark", "gamma_correction": "dark", "histogram_equalization": "dark",
+                            }
+                            return tool_map.get(tool_name, None)
+                    
+                    # 遍历所有turn，提取工具名称并映射到退化类型
+                    for turn in conv_hist:
+                        response = turn.get('response', '')
+                        if '<tool_call>' in response and '</tool_call>' in response:
+                            try:
+                                tool_match = re.search(r'<tool_call>(.*?)</tool_call>', response, re.DOTALL)
+                                if tool_match:
+                                    tools = json.loads(tool_match.group(1).strip())
+                                    if isinstance(tools, list):
+                                        for tool_dict in tools:
+                                            if isinstance(tool_dict, dict):
+                                                tool_name = tool_dict.get('name', '')
+                                                deg_type = get_degradation_type_from_tool(tool_name)
+                                                if deg_type and deg_type not in predicted_degradation_types:
+                                                    predicted_degradation_types.append(deg_type)
+                                    elif isinstance(tools, dict):
+                                        tool_name = tools.get('name', '')
+                                        deg_type = get_degradation_type_from_tool(tool_name)
+                                        if deg_type and deg_type not in predicted_degradation_types:
+                                            predicted_degradation_types.append(deg_type)
+                            except Exception as e:
+                                if idx == 0:
+                                    print(f"[DEBUG PRED DEG] Failed to extract tool from turn: {e}")
+            
+            # 格式化预测的退化类型
+            predicted_degradation_type_str = ", ".join(predicted_degradation_types) if predicted_degradation_types else "none"
+            
+            # 判断预测是否正确（集合匹配，顺序无关）
+            prediction_match = "❓"  # 默认未知
+            if degradation_type and degradation_type.lower() != "unknown":
+                # 解析GT退化类型（可能包含多个，用逗号分隔）
+                gt_types_list = [t.strip() for t in degradation_type.split(',')]
+                gt_types_set = set(gt_types_list)
                 
-                # 遍历所有turn，提取工具名称并映射到退化类型
-                for turn in conv_hist:
-                    response = turn.get('response', '')
-                    if '<tool_call>' in response and '</tool_call>' in response:
-                        try:
-                            tool_match = re.search(r'<tool_call>(.*?)</tool_call>', response, re.DOTALL)
-                            if tool_match:
-                                tools = json.loads(tool_match.group(1).strip())
-                                if isinstance(tools, list):
-                                    for tool_dict in tools:
-                                        if isinstance(tool_dict, dict):
-                                            tool_name = tool_dict.get('name', '')
-                                            deg_type = get_degradation_type_from_tool(tool_name)
-                                            if deg_type and deg_type not in predicted_degradation_types:
-                                                predicted_degradation_types.append(deg_type)
-                                elif isinstance(tools, dict):
-                                    tool_name = tools.get('name', '')
-                                    deg_type = get_degradation_type_from_tool(tool_name)
-                                    if deg_type and deg_type not in predicted_degradation_types:
-                                        predicted_degradation_types.append(deg_type)
-                        except Exception as e:
-                            if idx == 0:
-                                print(f"[DEBUG PRED DEG] Failed to extract tool from turn: {e}")
-        
-        # 格式化预测的退化类型
-        if predicted_degradation_types:
-            predicted_degradation_type_str = ", ".join(predicted_degradation_types)
-        else:
-            predicted_degradation_type_str = "none"
-        
-        # 判断预测是否正确（集合匹配，顺序无关）
-        # 需要从degradation_type中提取所有GT类型（可能是"type1, type2"格式）
-        prediction_match = "❓"  # 默认未知
-        if degradation_type and degradation_type.lower() != "unknown":
-            # 解析GT退化类型（可能包含多个，用逗号分隔）
-            gt_types_list = [t.strip() for t in degradation_type.split(',')]
-            gt_types_set = set(gt_types_list)
-            
-            # 解析预测退化类型
-            if predicted_degradation_type_str.lower() == "none":
-                pred_types_set = set()
-            else:
-                pred_types_list = [t.strip() for t in predicted_degradation_type_str.split(',')]
-                pred_types_set = set(pred_types_list)
-            
-            # 集合匹配（顺序无关）
-            if pred_types_set == gt_types_set:
-                prediction_match = "✅"  # 完全匹配
-            elif len(pred_types_set) > 0 and pred_types_set.issubset(gt_types_set):
-                prediction_match = "⚠️"  # 部分正确（预测的都对，但没预测全）
-            elif len(pred_types_set) > 0 and len(pred_types_set & gt_types_set) > 0:
-                prediction_match = "⚠️"  # 部分正确（有交集，但不完全对）
-            else:
-                prediction_match = "❌"  # 完全错误或未预测
-            
-            # 调试信息（第一个样本）
-            if idx == 0:
-                print(f"[DEBUG PRED MATCH] GT: {gt_types_set}, Predicted: {pred_types_set}, Match: {prediction_match}")
+                # 解析预测退化类型
+                if predicted_degradation_type_str.lower() == "none":
+                    pred_types_set = set()
+                else:
+                    pred_types_list = [t.strip() for t in predicted_degradation_type_str.split(',')]
+                    pred_types_set = set(pred_types_list)
+                
+                # 集合匹配（顺序无关）
+                if pred_types_set == gt_types_set:
+                    prediction_match = "✅"  # 完全匹配
+                elif len(pred_types_set) > 0 and pred_types_set.issubset(gt_types_set):
+                    prediction_match = "⚠️"  # 部分正确（预测的都对，但没预测全）
+                elif len(pred_types_set) > 0 and len(pred_types_set & gt_types_set) > 0:
+                    prediction_match = "⚠️"  # 部分正确（有交集，但不完全对）
+                else:
+                    prediction_match = "❌"  # 完全错误或未预测
+                
+                # 调试信息（第一个样本）
+                if idx == 0:
+                    print(f"[DEBUG PRED MATCH] GT: {gt_types_set}, Predicted: {pred_types_set}, Match: {prediction_match}")
         
         # 获取用户输入（增强版，支持多种格式）
         user_input = ""
@@ -1073,9 +1098,27 @@ def _log_conversation_table(
             tool_status = "❓ Unknown"
             failure_reason = "状态未知 (请检查日志)"
         
-        # 构建行数据（添加degradation_type、predicted_degradation_type、prediction_match、tool_status和failure_reason列）
-        row = [step, f"{mode}_step{step}_idx{idx}", trajectory_img, quality, num_tools, 
-               degradation_type, predicted_degradation_type_str, prediction_match, tool_status, failure_reason, user_input]
+        # 构建行数据（根据数据集类型动态构建）
+        row = [step, f"{mode}_step{step}_idx{idx}", trajectory_img, total_score, num_tools]
+        
+        # 添加reward组件列（根据数据集类型）
+        if is_visual_toolbox_v2:
+            # 数据集2：format和acc_reward
+            row.extend([
+                format_reward if format_reward is not None else "-",
+                acc_reward if acc_reward is not None else "-"
+            ])
+        elif is_image_restoration:
+            # 数据集1：quality、degradation type等
+            row.extend([
+                quality if 'quality' in locals() else 0.0,
+                degradation_type if degradation_type is not None else "unknown",
+                predicted_degradation_type_str if predicted_degradation_type_str is not None else "none",
+                prediction_match if prediction_match is not None else "❓"
+            ])
+        
+        # 通用列
+        row.extend([tool_status, failure_reason, user_input])
         
         # 提取每个turn的内容
         turn_data = {}
@@ -1181,7 +1224,12 @@ def _log_conversation_table(
         
         # 调试：打印第一行的内容
         if idx == 0:
-            print(f"[DEBUG CONV TABLE] First row data: quality={quality}, num_tools={num_tools}, degradation={degradation_type}, tool_status={tool_status}, failure_reason={failure_reason}, user_input_len={len(user_input)}, turn_data_count={len(turn_data)}, total_cols={len(row)}")
+            if is_visual_toolbox_v2:
+                print(f"[DEBUG CONV TABLE] First row data (visual_toolbox_v2): total_score={total_score}, num_tools={num_tools}, format={format_reward}, acc={acc_reward}, tool_status={tool_status}, failure_reason={failure_reason}, user_input_len={len(user_input)}, turn_data_count={len(turn_data)}, total_cols={len(row)}")
+            elif is_image_restoration:
+                print(f"[DEBUG CONV TABLE] First row data (image_restoration): total_score={total_score}, num_tools={num_tools}, degradation={degradation_type}, tool_status={tool_status}, failure_reason={failure_reason}, user_input_len={len(user_input)}, turn_data_count={len(turn_data)}, total_cols={len(row)}")
+            else:
+                print(f"[DEBUG CONV TABLE] First row data (unknown): total_score={total_score}, num_tools={num_tools}, tool_status={tool_status}, total_cols={len(row)}")
         
         new_table.add_data(*row)
         rows_added += 1
