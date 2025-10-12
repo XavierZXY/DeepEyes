@@ -2,6 +2,7 @@ import numpy as np
 import requests
 import json
 import re
+import os
 from PIL import Image
 from typing import Dict, Any, Union
 import io
@@ -24,8 +25,11 @@ class DeblurToolbox(ToolBase):
     name = "drbnet_defocus_deblurring"
     user_prompt = PROMPT.USER_PROMPT_V1
     
-    # 将此 URL 修改为您的 DRBNet 服务器的实际地址
-    server_url = "http://10.21.9.34:5003/deblur"
+    # 从环境变量读取IP地址，保留端口号5003
+    @property
+    def server_url(self):
+        tool_service_ip = os.environ.get('TOOL_SERVICE_IP', '10.21.9.34')
+        return f"http://{tool_service_ip}:5003/deblur"
 
     def __init__(self, _name="deblur_toolbox", _desc="A tool for deblurring images using a remote DRBNet API.", _params={}, **kwargs):
         super().__init__(

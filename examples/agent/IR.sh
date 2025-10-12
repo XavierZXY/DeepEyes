@@ -12,7 +12,7 @@ set -xmain_ppo
 #     --disable-log-requests
 
 PROJECT_NAME="agent_vlagent"
-EXPERIMENT_NAME="debug_for_TIR_IR_bs32_air_refrew_mi300"
+EXPERIMENT_NAME="debug_for_TIR_IR_bs32_air_refrew_balanced_mi300"
 # export CUDA_VISIBLE_DEVICES=4,5,6,7
 export SAVE_CHECKPOINT_DIR=/app/xiaominl/models/verl_checkpoints
 # export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
@@ -22,9 +22,22 @@ export ROCM_USE_GPU_COPY=1
 
 export WANDB_API_KEY=ce0821ccdf886f2dbb5703772a0c41aa85611afb
 
+# ========== Tool Service IP Configuration ==========
+# 统一配置所有图像处理工具的服务IP地址（端口号由各工具内部保留）
+# 工具及对应端口：
+# - SwinIR: 5001 (去噪/超分/JPEG伪影去除)
+# - DehazeFormer: 5002 (去雾)
+# - DRBNet (DeblurToolbox): 5003 (散焦去模糊)
+# - MPRNet: 5004 (去噪/去雨/运动去模糊)
+# - FBCNN: 5005 (JPEG伪影去除/质量评估)
+# - Restormer: 5006 (运动去模糊/散焦去模糊/去雨)
+# - XRestormer: 5007 (运动去模糊/去雨)
+export TOOL_SERVICE_IP=10.21.9.3
+# ========================================================
+
 # ========== Image Quality Reward Configuration ==========
 # 控制图像质量奖励的计算方式
-export IMAGE_QUALITY_USE_NO_REFERENCE=True  # True=无参考指标(NIQE/BRISQUE/CPBD/CLIP-IQA/Hyper-IQA), False=有参考指标(SSIM/LPIPS/PSNR)
+export IMAGE_QUALITY_USE_NO_REFERENCE=False  # True=无参考指标(NIQE/BRISQUE/CPBD/CLIP-IQA/Hyper-IQA), False=有参考指标(SSIM/LPIPS/PSNR)
 export IMAGE_QUALITY_DISCRETIZE_LEVELS=0    # 离散化等级: 0=连续奖励, 10=每10%一档, 20=每5%一档
 
 # 推荐配置：
@@ -78,7 +91,7 @@ export RAY_TMPDIR=/app/models/ray_tmp
 export MIOPEN_FIND_MODE=3
 export MIOPEN_DEBUG_DISABLE_FIND_DB=0
 export PYTORCH_ROCM_ARCH=gfx90a
-BASEDIR=/app/xiaominl/datasets/air
+BASEDIR=/app/xiaominl/datasets/air_d1_sp9_up2_balanced
 VISUAL_DATASET_TRAIN_0_6_2=${BASEDIR}/shard-000000.parquet
 VISUAL_DATASET_TRAIN_0_1_2=${BASEDIR}/shard-000000.parquet
 VISUAL_DATASET_TRAIN_0_8=${BASEDIR}/shard-000000.parquet
@@ -87,10 +100,13 @@ EUREKA_DATASET_TRAIN=${BASEDIR}/shard-000000.parquet
 
 VISUAL_DATASET_TRAIN_0=${BASEDIR}/shard-train-000000.parquet
 VISUAL_DATASET_TRAIN_1=${BASEDIR}/shard-train-000001.parquet
-# VISUAL_DATASET_TRAIN_2=${BASEDIR}/shard-train-000002.parquet
+VISUAL_DATASET_TRAIN_2=${BASEDIR}/shard-train-000002.parquet
 # VISUAL_DATASET_TRAIN_3=${BASEDIR}/shard-train-000003.parquet
 
 VISUAL_DATASET_TEST_0=${BASEDIR}/shard-test-000000.parquet
+# VISUAL_DATASET_TEST_1=${BASEDIR}/shard-test-000001.parquet
+# VISUAL_DATASET_TEST_2=${BASEDIR}/shard-test-000002.parquet
+# VISUAL_DATASET_TEST_3=${BASEDIR}/shard-test-000003.parquet
 # VISUAL_DATASET_TRAIN_4=${BASEDIR}/shard-000004.parquet
 # VISUAL_DATASET_TRAIN_5=${BASEDIR}/shard-000005.parquet
 # VISUAL_DATASET_TRAIN_6=${BASEDIR}/shard-000006.parquet
@@ -102,7 +118,7 @@ REF_MODEL_PATH=/app/xiaominl/models/Qwen2.5-VL-7B-Instruct
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     +debug=False \
     +vs_debug=False \
-    data.train_files=[${VISUAL_DATASET_TRAIN_0},${VISUAL_DATASET_TRAIN_1}] \
+    data.train_files=[${VISUAL_DATASET_TRAIN_0},${VISUAL_DATASET_TRAIN_1},${VISUAL_DATASET_TRAIN_2}] \
     data.val_files=[${VISUAL_DATASET_TEST_0}] \
     data.train_batch_size=32 \
     data.max_prompt_length=8192 \
@@ -127,7 +143,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.n=8 \
     actor_rollout_ref.rollout.max_num_batched_tokens=32768 \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.25 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.3 \
     actor_rollout_ref.rollout.enforce_eager=False \
     actor_rollout_ref.rollout.free_cache_engine=False \
     actor_rollout_ref.rollout.enable_chunked_prefill=False \
@@ -139,7 +155,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.agent.tool_name_key=env_name \
     actor_rollout_ref.rollout.agent.single_response_max_tokens=10240 \
     actor_rollout_ref.rollout.agent.max_turns=1 \
-    actor_rollout_ref.rollout.agent.concurrent_workers=1 \
+    actor_rollout_ref.rollout.agent.concurrent_workers=2 \
     actor_rollout_ref.rollout.agent.show_tqdm=True \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb','rl_logging_board'] \
@@ -147,7 +163,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=${WORLD_SIZE} \
     trainer.save_freq=20 \
-    trainer.test_freq=5 \
+    trainer.test_freq=10 \
     trainer.project_name=${PROJECT_NAME} \
     trainer.experiment_name=${EXPERIMENT_NAME} \
     trainer.default_local_dir=${SAVE_CHECKPOINT_DIR}/${PROJECT_NAME}/${EXPERIMENT_NAME} \

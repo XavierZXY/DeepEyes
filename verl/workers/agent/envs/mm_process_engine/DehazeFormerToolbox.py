@@ -2,6 +2,7 @@ import requests
 import json
 import re
 import io
+import os
 from PIL import Image
 from typing import Dict, Any, Tuple
 from .IRprompt import PROMPT
@@ -23,7 +24,7 @@ class DehazeFormerToolbox(ToolBase):
     name = "dehazeformer_dehaze"
     user_prompt = PROMPT.USER_PROMPT_V1
     
-    def __init__(self, _name, _desc, _params, api_url: str = 'http://10.21.9.34:5002/dehaze'):
+    def __init__(self, _name, _desc, _params, api_url: str = None):
         """
         Initializes the toolbox.
 
@@ -31,6 +32,10 @@ class DehazeFormerToolbox(ToolBase):
             api_url (str): The URL of the DehazeFormer Flask API endpoint.
         """
         super().__init__(name=self.name)
+        # 从环境变量读取IP地址，保留端口号5002
+        if api_url is None:
+            tool_service_ip = os.environ.get('TOOL_SERVICE_IP', '10.21.9.34')
+            api_url = f'http://{tool_service_ip}:5002/dehaze'
         self.api_url = api_url
         self.multi_modal_data = None
         print(f"DehazeFormerToolbox initialized. API endpoint: {self.api_url}")

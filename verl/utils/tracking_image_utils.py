@@ -817,12 +817,29 @@ def _log_conversation_table(
     else:
         print(f"[DEBUG CONV TABLE] ⚠️  responses is empty!")
     
-    # 固定最大turn数（避免列数动态变化）
+    # 固定最大turn数和退化数量（避免列数动态变化）
     MAX_TURNS = 5  # 根据max_turns配置调整
+    MAX_DEGRADATIONS = 4  # 最多4个退化
     
-    # 创建固定列：基础信息 + 图像轨迹 + 退化类别 + 预测退化类型 + 预测是否正确 + 工具状态 + 失败原因 + 每个turn的think和tools
-    columns = ["Step", "Sample_ID", "Trajectory_Image", "Quality_Score", "Num_Tools", 
-               "Degradation_Type", "Predicted_Degradation_Type", "Prediction_Match", "Tool_Status", "Failure_Reason", "User_Input"]
+    # 创建固定列：基础信息 + 图像轨迹 + 退化详情（类型+强度）× 4 + 预测退化类型 + 预测是否正确 + 工具状态 + 失败原因 + 指标信息 + 每个turn的think和tools
+    columns = ["Step", "Sample_ID", "Trajectory_Image", "Quality_Score", "Num_Tools"]
+    
+    # 添加4个退化类型和4个退化强度列
+    for i in range(MAX_DEGRADATIONS):
+        columns.append(f"Degradation_Type_{i+1}")
+        columns.append(f"Degradation_Level_{i+1}")
+    
+    # 继续添加其他列
+    columns.extend([
+        "Predicted_Degradation_Type", "Prediction_Match", "Tool_Status", "Failure_Reason",
+        # 退化图和复原图的指标，以及提升百分比
+        "Degraded_SSIM", "Degraded_LPIPS", "Degraded_PSNR",
+        "Restored_SSIM", "Restored_LPIPS", "Restored_PSNR",
+        "Improve_SSIM%", "Improve_LPIPS%", "Improve_PSNR%",
+        "User_Input"
+    ])
+    
+    # 添加turn列
     for turn_idx in range(MAX_TURNS):
         columns.append(f"Turn{turn_idx+1}_Think")
         columns.append(f"Turn{turn_idx+1}_Tools")
@@ -838,6 +855,17 @@ def _log_conversation_table(
     
     # 创建新table with existing data
     new_table = wandb.Table(columns=columns, data=existing_table.data)
+    
+    # 计算退化图和复原图的指标（只对indices中的样本计算，性能优化）
+    print(f"[DEBUG CONV TABLE] Computing degraded/restored metrics for {len(indices)} samples...")
+    batch_data_for_metrics = {
+        'image_history': image_histories,
+        'original_images': original_images,
+    }
+    degraded_restored_metrics = compute_degraded_and_restored_metrics_for_indices(
+        batch_data=batch_data_for_metrics,
+        indices=indices
+    )
     
     # 准备新行
     rows_added = 0
@@ -857,11 +885,49 @@ def _log_conversation_table(
         if img_hist is not None and isinstance(img_hist, (list, tuple)):
             num_tools = max(0, len(img_hist) - 1)
         
-        # 获取退化类别（从reward_extra_infos_dict - Ground Truth）
-        degradation_type = "unknown"
-        if reward_extra_infos_dict and 'degradation_type' in reward_extra_infos_dict:
-            if idx < len(reward_extra_infos_dict['degradation_type']):
-                degradation_type = reward_extra_infos_dict['degradation_type'][idx]
+        # 从reward_model中提取退化类型和强度（最多4个）
+        degradation_types_list = []  # 退化类型列表
+        degradation_levels_list = []  # 退化强度列表
+        
+        # 优先从reward_model中获取（包含详细的type和level信息）
+        if reward_extra_infos_dict and 'reward_model' in reward_extra_infos_dict:
+            if idx < len(reward_extra_infos_dict['reward_model']):
+                reward_model = reward_extra_infos_dict['reward_model'][idx]
+                
+                # reward_model是一个列表，每个元素是一个退化
+                if isinstance(reward_model, list):
+                    for deg_item in reward_model[:MAX_DEGRADATIONS]:  # 最多取4个
+                        if isinstance(deg_item, dict):
+                            deg_type = deg_item.get('degradation_type', 'unknown')
+                            deg_level = deg_item.get('degradation_level', 'unknown')
+                            degradation_types_list.append(deg_type)
+                            degradation_levels_list.append(deg_level)
+        
+        # 如果reward_model不可用，从degradation_type字段提取（向后兼容）
+        if not degradation_types_list:
+            if reward_extra_infos_dict and 'degradation_type' in reward_extra_infos_dict:
+                if idx < len(reward_extra_infos_dict['degradation_type']):
+                    degradation_type_str = reward_extra_infos_dict['degradation_type'][idx]
+                    # 可能是逗号分隔的多个类型
+                    if isinstance(degradation_type_str, str) and degradation_type_str.lower() != "unknown":
+                        types = [t.strip() for t in degradation_type_str.split(',')]
+                        for t in types[:MAX_DEGRADATIONS]:
+                            degradation_types_list.append(t)
+                            degradation_levels_list.append('unknown')  # 没有强度信息
+        
+        # 填充到固定的4个位置（不足的填"none"）
+        deg_type_1 = degradation_types_list[0] if len(degradation_types_list) > 0 else "none"
+        deg_type_2 = degradation_types_list[1] if len(degradation_types_list) > 1 else "none"
+        deg_type_3 = degradation_types_list[2] if len(degradation_types_list) > 2 else "none"
+        deg_type_4 = degradation_types_list[3] if len(degradation_types_list) > 3 else "none"
+        
+        deg_level_1 = degradation_levels_list[0] if len(degradation_levels_list) > 0 else "none"
+        deg_level_2 = degradation_levels_list[1] if len(degradation_levels_list) > 1 else "none"
+        deg_level_3 = degradation_levels_list[2] if len(degradation_levels_list) > 2 else "none"
+        deg_level_4 = degradation_levels_list[3] if len(degradation_levels_list) > 3 else "none"
+        
+        # 保留旧的degradation_type用于预测匹配（合并所有类型）
+        degradation_type = ", ".join([t for t in degradation_types_list if t != "none"]) if degradation_types_list else "unknown"
         
         # 提取预测的退化类型（从conversation_history中的tool_call）
         predicted_degradation_types = []
@@ -1073,9 +1139,60 @@ def _log_conversation_table(
             tool_status = "❓ Unknown"
             failure_reason = "状态未知 (请检查日志)"
         
-        # 构建行数据（添加degradation_type、predicted_degradation_type、prediction_match、tool_status和failure_reason列）
-        row = [step, f"{mode}_step{step}_idx{idx}", trajectory_img, quality, num_tools, 
-               degradation_type, predicted_degradation_type_str, prediction_match, tool_status, failure_reason, user_input]
+        # 提取退化图和复原图的指标（从degraded_restored_metrics）
+        deg_ssim = 0.0
+        deg_lpips = 0.0
+        deg_psnr = 0.0
+        rest_ssim = 0.0
+        rest_lpips = 0.0
+        rest_psnr = 0.0
+        impr_ssim = 0.0
+        impr_lpips = 0.0
+        impr_psnr = 0.0
+        
+        if degraded_restored_metrics:
+            if 'degraded_ssim' in degraded_restored_metrics and idx < len(degraded_restored_metrics['degraded_ssim']):
+                deg_ssim = degraded_restored_metrics['degraded_ssim'][idx]
+            if 'degraded_lpips' in degraded_restored_metrics and idx < len(degraded_restored_metrics['degraded_lpips']):
+                deg_lpips = degraded_restored_metrics['degraded_lpips'][idx]
+            if 'degraded_psnr' in degraded_restored_metrics and idx < len(degraded_restored_metrics['degraded_psnr']):
+                deg_psnr = degraded_restored_metrics['degraded_psnr'][idx]
+            if 'restored_ssim' in degraded_restored_metrics and idx < len(degraded_restored_metrics['restored_ssim']):
+                rest_ssim = degraded_restored_metrics['restored_ssim'][idx]
+            if 'restored_lpips' in degraded_restored_metrics and idx < len(degraded_restored_metrics['restored_lpips']):
+                rest_lpips = degraded_restored_metrics['restored_lpips'][idx]
+            if 'restored_psnr' in degraded_restored_metrics and idx < len(degraded_restored_metrics['restored_psnr']):
+                rest_psnr = degraded_restored_metrics['restored_psnr'][idx]
+            if 'improvement_ssim' in degraded_restored_metrics and idx < len(degraded_restored_metrics['improvement_ssim']):
+                impr_ssim = degraded_restored_metrics['improvement_ssim'][idx]
+            if 'improvement_lpips' in degraded_restored_metrics and idx < len(degraded_restored_metrics['improvement_lpips']):
+                impr_lpips = degraded_restored_metrics['improvement_lpips'][idx]
+            if 'improvement_psnr' in degraded_restored_metrics and idx < len(degraded_restored_metrics['improvement_psnr']):
+                impr_psnr = degraded_restored_metrics['improvement_psnr'][idx]
+        
+        # 构建行数据（添加4个退化类型+强度、predicted_degradation_type、prediction_match、tool_status、failure_reason、指标列）
+        row = [step, f"{mode}_step{step}_idx{idx}", trajectory_img, quality, num_tools]
+        
+        # 添加4组退化类型和强度
+        row.extend([
+            deg_type_1, deg_level_1,
+            deg_type_2, deg_level_2,
+            deg_type_3, deg_level_3,
+            deg_type_4, deg_level_4,
+        ])
+        
+        # 继续添加其他列
+        row.extend([
+            predicted_degradation_type_str, prediction_match, tool_status, failure_reason,
+            # 退化图指标
+            deg_ssim, deg_lpips, deg_psnr,
+            # 复原图指标
+            rest_ssim, rest_lpips, rest_psnr,
+            # 提升百分比
+            impr_ssim, impr_lpips, impr_psnr,
+            # 用户输入
+            user_input
+        ])
         
         # 提取每个turn的内容
         turn_data = {}
@@ -1181,7 +1298,18 @@ def _log_conversation_table(
         
         # 调试：打印第一行的内容
         if idx == 0:
-            print(f"[DEBUG CONV TABLE] First row data: quality={quality}, num_tools={num_tools}, degradation={degradation_type}, tool_status={tool_status}, failure_reason={failure_reason}, user_input_len={len(user_input)}, turn_data_count={len(turn_data)}, total_cols={len(row)}")
+            print(f"[DEBUG CONV TABLE] First row data:")
+            print(f"  quality={quality}, num_tools={num_tools}")
+            print(f"  Degradations:")
+            print(f"    Type1={deg_type_1}, Level1={deg_level_1}")
+            print(f"    Type2={deg_type_2}, Level2={deg_level_2}")
+            print(f"    Type3={deg_type_3}, Level3={deg_level_3}")
+            print(f"    Type4={deg_type_4}, Level4={deg_level_4}")
+            print(f"  tool_status={tool_status}")
+            print(f"  Degraded: SSIM={deg_ssim:.4f}, LPIPS={deg_lpips:.4f}, PSNR={deg_psnr:.2f}")
+            print(f"  Restored: SSIM={rest_ssim:.4f}, LPIPS={rest_lpips:.4f}, PSNR={rest_psnr:.2f}")
+            print(f"  Improvement: SSIM={impr_ssim:+.1f}%, LPIPS={impr_lpips:+.1f}%, PSNR={impr_psnr:+.1f}%")
+            print(f"  user_input_len={len(user_input)}, turn_data_count={len(turn_data)}, total_cols={len(row)}")
         
         new_table.add_data(*row)
         rows_added += 1
@@ -1341,6 +1469,198 @@ def save_conversations_to_markdown(
         f.write('\n'.join(lines))
     
     print(f"[DEBUG MARKDOWN] ✓ Saved conversations to {filename}")
+
+
+def compute_degraded_and_restored_metrics_for_indices(
+    batch_data: Dict,
+    indices: List[int],
+) -> Dict[str, List]:
+    """
+    仅为指定indices的样本计算退化图和复原图的有参考指标（性能优化版）
+    
+    计算两组指标：
+    1. Degraded vs GT: 退化图与原图的指标（基准）
+    2. Restored vs GT: 复原图与原图的指标（处理后）
+    3. Improvement: 提升百分比
+    
+    Args:
+        batch_data: 包含image_history和original_images的batch数据
+        indices: 需要计算指标的样本索引列表（train时为selected_indices，val时为全部）
+        
+    Returns:
+        Dict包含退化图和复原图的指标，以及提升百分比
+        - degraded_ssim, degraded_lpips, degraded_psnr
+        - restored_ssim, restored_lpips, restored_psnr  
+        - improvement_ssim, improvement_lpips, improvement_psnr
+    """
+    try:
+        from verl.utils.reward_score.image_quality_metrics import get_image_quality_metrics
+    except ImportError:
+        print("[WARNING] Image quality metrics not available")
+        return {}
+    
+    image_histories = batch_data.get('image_history', [])
+    original_images = batch_data.get('original_images', [])
+    
+    print(f"[DEBUG DEGRADED METRICS] Computing metrics for {len(indices)} samples (indices: {indices[:5]}...)")
+    
+    # 初始化结果列表（全部样本，但只计算indices中的）
+    num_samples = len(image_histories)
+    degraded_ssim = [0.0] * num_samples
+    degraded_lpips = [0.0] * num_samples
+    degraded_psnr = [0.0] * num_samples
+    restored_ssim = [0.0] * num_samples
+    restored_lpips = [0.0] * num_samples
+    restored_psnr = [0.0] * num_samples
+    improvement_ssim = [0.0] * num_samples
+    improvement_lpips = [0.0] * num_samples
+    improvement_psnr = [0.0] * num_samples
+    
+    # 使用全局单例
+    metrics_calculator = get_image_quality_metrics()
+    
+    calculated_count = 0
+    skip_count = 0
+    
+    # 只对indices中的样本计算
+    for idx in indices:
+        # 检查索引有效性
+        if idx >= len(image_histories) or idx >= len(original_images):
+            skip_count += 1
+            continue
+        
+        # 检查original_image
+        if original_images[idx] is None:
+            skip_count += 1
+            continue
+        
+        # 检查image_history
+        img_hist = image_histories[idx]
+        if img_hist is None or not isinstance(img_hist, (list, tuple)) or len(img_hist) < 1:
+            skip_count += 1
+            continue
+        
+        try:
+            # 提取原图
+            original_img_raw = extract_pil_image_from_data(original_images[idx])
+            if original_img_raw is None:
+                skip_count += 1
+                continue
+            
+            # 应用fetch_image处理
+            try:
+                from qwen_vl_utils import fetch_image
+                from PIL import Image
+                if isinstance(original_img_raw, Image.Image):
+                    original_dict = {"image": original_img_raw}
+                    original_img = fetch_image(original_dict)
+                else:
+                    original_img = original_img_raw
+            except Exception as e:
+                original_img = original_img_raw
+            
+            # 提取退化图（image_history[0]）
+            degraded_img_raw = extract_pil_image_from_data(img_hist[0])
+            if degraded_img_raw is None:
+                skip_count += 1
+                continue
+            
+            # 对退化图应用fetch_image处理（与原图对齐维度）
+            try:
+                from qwen_vl_utils import fetch_image
+                from PIL import Image
+                if isinstance(degraded_img_raw, Image.Image):
+                    degraded_dict = {"image": degraded_img_raw}
+                    degraded_img = fetch_image(degraded_dict)
+                else:
+                    degraded_img = degraded_img_raw
+            except Exception as e:
+                if calculated_count < 3:
+                    print(f"[DEBUG DEGRADED METRICS] Sample {idx}: fetch_image on degraded failed, using raw: {e}")
+                degraded_img = degraded_img_raw
+            
+            # 确保尺寸一致（处理low resolution等改变尺寸的退化）
+            # 原则：将退化图resize到原图尺寸（GT是标准，待评估图像需要对齐）
+            if degraded_img.size != original_img.size:
+                print(f"[DEBUG DEGRADED METRICS] Sample {idx}: 尺寸不匹配，退化图{degraded_img.size} → 原图{original_img.size}")
+                degraded_img = degraded_img.resize(original_img.size, Image.Resampling.LANCZOS)
+            
+            # 计算退化图vs原图的指标（现在维度对齐）
+            degraded_metrics = metrics_calculator.calculate_all_metrics(degraded_img, original_img)
+            degraded_ssim[idx] = degraded_metrics.get('ssim', 0.0)
+            degraded_lpips[idx] = degraded_metrics.get('lpips', 0.0)
+            degraded_psnr[idx] = degraded_metrics.get('psnr', 0.0)
+            
+            # 如果工具已执行，计算复原图vs原图的指标
+            if len(img_hist) >= 2:
+                restored_img_raw = extract_pil_image_from_data(img_hist[-1])
+                if restored_img_raw is not None:
+                    # 工具返回的图像是纯PIL.Image，没有经过fetch_image处理
+                    # 需要应用fetch_image来与原图对齐维度
+                    try:
+                        from qwen_vl_utils import fetch_image
+                        from PIL import Image
+                        if isinstance(restored_img_raw, Image.Image):
+                            restored_dict = {"image": restored_img_raw}
+                            restored_img = fetch_image(restored_dict)
+                        else:
+                            restored_img = restored_img_raw
+                    except Exception as e:
+                        if calculated_count < 3:
+                            print(f"[DEBUG DEGRADED METRICS] Sample {idx}: fetch_image for restored failed, using raw: {e}")
+                        restored_img = restored_img_raw
+                    
+                    # 确保尺寸一致（处理super_resolution等改变尺寸的工具）
+                    # 原则：将复原图resize到原图尺寸（GT是标准，待评估图像需要对齐）
+                    if restored_img.size != original_img.size:
+                        print(f"[DEBUG DEGRADED METRICS] Sample {idx}: 尺寸不匹配，复原图{restored_img.size} → 原图{original_img.size}")
+                        restored_img = restored_img.resize(original_img.size, Image.Resampling.LANCZOS)
+                    
+                    restored_metrics = metrics_calculator.calculate_all_metrics(restored_img, original_img)
+                    restored_ssim[idx] = restored_metrics.get('ssim', 0.0)
+                    restored_lpips[idx] = restored_metrics.get('lpips', 0.0)
+                    restored_psnr[idx] = restored_metrics.get('psnr', 0.0)
+                    
+                    # 计算提升百分比
+                    # SSIM和PSNR: 越高越好，计算提升率 = (restored - degraded) / degraded * 100
+                    # LPIPS: 越低越好，计算降低率 = (degraded - restored) / degraded * 100
+                    if degraded_ssim[idx] > 0:
+                        improvement_ssim[idx] = (restored_ssim[idx] - degraded_ssim[idx]) / degraded_ssim[idx] * 100
+                    if degraded_lpips[idx] > 0:
+                        improvement_lpips[idx] = (degraded_lpips[idx] - restored_lpips[idx]) / degraded_lpips[idx] * 100
+                    if degraded_psnr[idx] > 0:
+                        improvement_psnr[idx] = (restored_psnr[idx] - degraded_psnr[idx]) / degraded_psnr[idx] * 100
+            
+            calculated_count += 1
+            
+            # 打印前3个样本的结果
+            if calculated_count <= 3:
+                print(f"[DEBUG DEGRADED METRICS] Sample {idx}:")
+                print(f"  Degraded: SSIM={degraded_ssim[idx]:.4f}, LPIPS={degraded_lpips[idx]:.4f}, PSNR={degraded_psnr[idx]:.2f}")
+                print(f"  Restored: SSIM={restored_ssim[idx]:.4f}, LPIPS={restored_lpips[idx]:.4f}, PSNR={restored_psnr[idx]:.2f}")
+                print(f"  Improvement: SSIM={improvement_ssim[idx]:+.1f}%, LPIPS={improvement_lpips[idx]:+.1f}%, PSNR={improvement_psnr[idx]:+.1f}%")
+            
+        except Exception as e:
+            skip_count += 1
+            if calculated_count < 3:
+                print(f"[DEBUG DEGRADED METRICS] Sample {idx} failed: {e}")
+            continue
+    
+    print(f"[DEBUG DEGRADED METRICS] ========== Summary ==========")
+    print(f"[DEBUG DEGRADED METRICS] Requested: {len(indices)}, Calculated: {calculated_count}, Skipped: {skip_count}")
+    print(f"[DEBUG DEGRADED METRICS] ================================\n")
+    
+    return {
+        'degraded_ssim': degraded_ssim,
+        'degraded_lpips': degraded_lpips,
+        'degraded_psnr': degraded_psnr,
+        'restored_ssim': restored_ssim,
+        'restored_lpips': restored_lpips,
+        'restored_psnr': restored_psnr,
+        'improvement_ssim': improvement_ssim,
+        'improvement_lpips': improvement_lpips,
+        'improvement_psnr': improvement_psnr,
+    }
 
 
 def compute_reference_metrics_for_batch(

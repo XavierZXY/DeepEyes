@@ -491,7 +491,7 @@ class RayPPOTrainer:
         self.train_dataloader = StatefulDataLoader(
             dataset=self.train_dataset,
             batch_size=self.config.data.get("gen_batch_size", self.config.data.train_batch_size),
-            num_workers=8,
+            num_workers=32,
             drop_last=True,
             collate_fn=collate_fn,
             sampler=sampler,
@@ -508,7 +508,7 @@ class RayPPOTrainer:
             # Validation datasets are sent to inference engines as a whole batch,
             # which will schedule the memory themselves.
             batch_size=len(self.val_dataset),
-            num_workers=8,
+            num_workers=32,
             shuffle=False,
             drop_last=False,
             collate_fn=collate_fn,
@@ -813,9 +813,14 @@ class RayPPOTrainer:
                     val_detailed_metrics = {}
                     for key in ['niqe_score', 'brisque_score', 'cpbd_score', 'clip_iqa_score', 'hyper_iqa_score',  # 无参考指标
                                'image_quality_reward_continuous', 'mode', 'degradation_type', 'degradation_types_all',  # 退化类型信息
-                               'ssim_score_ref', 'lpips_score_ref', 'psnr_score_ref']:  # 有参考指标
+                               'ssim_score_ref', 'lpips_score_ref', 'psnr_score_ref',  # 有参考指标
+                               'reward_model']:  # 新增：退化类型和强度信息
                         if key in reward_extra_infos_dict:
                             val_detailed_metrics[key] = reward_extra_infos_dict[key]
+                    
+                    # 如果reward_extra_infos_dict中没有reward_model，从batch中获取
+                    if 'reward_model' not in val_detailed_metrics and len(val_reward_models) > 0:
+                        val_detailed_metrics['reward_model'] = val_reward_models
                     
                     # Extract system prompt from the first sample's raw_prompt if available
                     system_prompt = None
@@ -1342,9 +1347,18 @@ class RayPPOTrainer:
                         detailed_metrics = {}
                         for key in ['niqe_score', 'brisque_score', 'cpbd_score', 'clip_iqa_score', 'hyper_iqa_score',  # 无参考指标
                                    'image_quality_reward_continuous', 'mode', 'degradation_type', 'degradation_types_all',  # 退化类型信息
-                                   'ssim_score_ref', 'lpips_score_ref', 'psnr_score_ref']:  # 有参考指标
+                                   'ssim_score_ref', 'lpips_score_ref', 'psnr_score_ref',  # 有参考指标
+                                   'reward_model']:  # 新增：退化类型和强度信息
                             if key in reward_extra_infos_dict:
                                 detailed_metrics[key] = reward_extra_infos_dict[key]
+                        
+                        # 如果reward_extra_infos_dict中没有reward_model，从batch中获取
+                        if 'reward_model' not in detailed_metrics and 'reward_model' in batch.non_tensor_batch:
+                            reward_models = batch.non_tensor_batch['reward_model']
+                            if isinstance(reward_models, np.ndarray):
+                                detailed_metrics['reward_model'] = reward_models.tolist()
+                            else:
+                                detailed_metrics['reward_model'] = reward_models
                         
                         # Extract system prompt from the first sample's raw_prompt if available
                         system_prompt = None

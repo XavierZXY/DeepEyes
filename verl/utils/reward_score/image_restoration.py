@@ -768,12 +768,35 @@ def compute_image_quality_reward_v2(solution_str: str, extra_info: Dict = None,
     try:
         print(f"[DEBUG] 开始图像质量计算... 模式: {'无参考' if use_no_reference else '有参考'}")
         
-        # 复原图从图像历史中提取（已经经过了fetch_image处理）
-        restored_image = extract_image_from_multimodal_data(restored_image_data)
-        print(f"[DEBUG] 复原图尺寸: {restored_image.size if hasattr(restored_image, 'size') else 'N/A'}")
+        # 复原图从图像历史中提取
+        restored_image_raw = extract_image_from_multimodal_data(restored_image_data)
+        print(f"[DEBUG] 复原图(raw) 类型: {type(restored_image_raw)}")
         
-        if restored_image is None:
+        if restored_image_raw is None:
             return return_negative_quality_result("Failed to extract restored image from multimodal data")
+        
+        # 将复原图转为PIL.Image（如果是bytes）
+        from PIL import Image
+        import io
+        if isinstance(restored_image_raw, bytes):
+            restored_image_pil = Image.open(io.BytesIO(restored_image_raw))
+            print(f"[DEBUG] 复原图从bytes转PIL后尺寸: {restored_image_pil.size}")
+        elif hasattr(restored_image_raw, 'size'):
+            restored_image_pil = restored_image_raw
+            print(f"[DEBUG] 复原图已是PIL.Image，尺寸: {restored_image_pil.size}")
+        else:
+            print(f"[DEBUG] 复原图格式未知: {type(restored_image_raw)}")
+            return return_negative_quality_result(f"Unsupported restored image format: {type(restored_image_raw)}")
+        
+        # 对复原图应用fetch_image处理（与原图对齐维度）
+        try:
+            from qwen_vl_utils import fetch_image
+            restored_dict = {"image": restored_image_pil}
+            restored_image = fetch_image(restored_dict)
+            print(f"[DEBUG] 复原图经fetch_image后尺寸: {restored_image.size}")
+        except Exception as e:
+            print(f"[DEBUG] 复原图fetch_image失败，使用PIL图像: {e}")
+            restored_image = restored_image_pil
         
         if use_no_reference:
             # 使用无参考指标计算图像质量奖励
@@ -866,6 +889,14 @@ def compute_image_quality_reward_v2(solution_str: str, extra_info: Dict = None,
                 
             if original_image is None:
                 return return_negative_quality_result("Failed to extract original image from multimodal data")
+            
+            # 确保尺寸一致（处理super_resolution等改变尺寸的工具）
+            # 原则：将复原图resize到原图尺寸（GT是标准，待评估图像需要对齐）
+            if restored_image.size != original_image.size:
+                print(f"[DEBUG] 尺寸不匹配: restored={restored_image.size} vs original={original_image.size}")
+                # 将复原图resize到原图的尺寸（GT是参考标准）
+                restored_image = restored_image.resize(original_image.size, Image.Resampling.LANCZOS)
+                print(f"[DEBUG] 复原图已resize到: {restored_image.size}")
             
             # Compute image quality reward with detailed metrics
             from .image_quality_metrics import get_image_quality_metrics, normalize_metrics

@@ -4,6 +4,7 @@ import base64
 import io
 import json
 import re
+import os
 from typing import Dict, Any, Union
 from PIL import Image
 
@@ -25,7 +26,8 @@ class BaseSwinIRToolbox(ToolBase):
     task_name: str = ""
     
     user_prompt = PROMPT.USER_PROMPT_V1
-    api_url = "http://10.21.9.34:5001/process"
+    # 从环境变量读取IP地址，保留端口号5001
+    api_url = f"http://{os.environ.get('TOOL_SERVICE_IP', '10.21.9.34')}:5001/process"
 
     def __init__(self, _name, _desc, _params, **kwargs):
         # The 'name' is now a class attribute, so we don't need to pass it here.
