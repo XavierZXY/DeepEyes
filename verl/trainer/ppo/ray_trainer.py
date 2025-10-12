@@ -584,6 +584,8 @@ class RayPPOTrainer:
         val_responses = []
         val_original_images = []
         val_conversation_histories = []
+        val_reward_models = []  # 用于准确率计算
+        val_env_names = []      # 用于准确率计算
 
         print(f"[DEBUG VAL DATALOADER] Step {self.global_steps}: Starting validation, dataloader length={len(self.val_dataloader)}")
         batch_count = 0
@@ -705,6 +707,22 @@ class RayPPOTrainer:
             # Collect responses
             if 'responses' in test_batch.batch:
                 val_responses.extend(test_batch.batch['responses'])
+            
+            # Collect reward_model for accuracy computation
+            if 'reward_model' in test_batch.non_tensor_batch:
+                reward_models = test_batch.non_tensor_batch['reward_model']
+                if isinstance(reward_models, np.ndarray):
+                    val_reward_models.extend(reward_models.tolist())
+                elif isinstance(reward_models, list):
+                    val_reward_models.extend(reward_models)
+            
+            # Collect env_name for filtering clean samples
+            if 'env_name' in test_batch.non_tensor_batch:
+                env_names = test_batch.non_tensor_batch['env_name']
+                if isinstance(env_names, np.ndarray):
+                    val_env_names.extend(env_names.tolist())
+                elif isinstance(env_names, list):
+                    val_env_names.extend(env_names)
 
         print(f"[DEBUG VAL DATALOADER] Step {self.global_steps}: Finished validation loop, processed {batch_count} batches")
         print(f"[DEBUG VAL DATALOADER] Step {self.global_steps}: Total samples collected: {len(sample_scores)}")
@@ -766,6 +784,23 @@ class RayPPOTrainer:
             for key, value in val_reward_component_metrics.items():
                 metric_dict[f"val/{key}"] = value
             print(f"[DEBUG VAL REWARD METRICS] Collected {len(val_reward_component_metrics)} validation reward component metrics")
+        
+        # 计算退化类型预测准确率（新增）
+        if len(val_conversation_histories) > 0 and len(val_reward_models) > 0:
+            try:
+                from verl.utils.degradation_accuracy_utils import compute_degradation_accuracy
+                
+                accuracy_metrics = compute_degradation_accuracy(
+                    conversation_histories=val_conversation_histories,
+                    reward_models=val_reward_models,
+                    env_names=val_env_names
+                )
+                metric_dict.update(accuracy_metrics)
+                print(f"[DEBUG VAL ACC] Computed {len(accuracy_metrics)} accuracy metrics")
+            except Exception as e:
+                print(f"[WARNING] Failed to compute degradation accuracy: {e}")
+                import traceback
+                traceback.print_exc()
         
         # Upload validation trajectory images to wandb (all validation samples)
         if hasattr(self, 'logger') and 'wandb' in self.logger.logger and self.config.trainer.get('log_images_to_wandb', True):

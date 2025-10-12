@@ -820,9 +820,9 @@ def _log_conversation_table(
     # 固定最大turn数（避免列数动态变化）
     MAX_TURNS = 5  # 根据max_turns配置调整
     
-    # 创建固定列：基础信息 + 图像轨迹 + 退化类别 + 工具状态 + 失败原因 + 每个turn的think和tools
+    # 创建固定列：基础信息 + 图像轨迹 + 退化类别 + 预测退化类型 + 预测是否正确 + 工具状态 + 失败原因 + 每个turn的think和tools
     columns = ["Step", "Sample_ID", "Trajectory_Image", "Quality_Score", "Num_Tools", 
-               "Degradation_Type", "Tool_Status", "Failure_Reason", "User_Input"]
+               "Degradation_Type", "Predicted_Degradation_Type", "Prediction_Match", "Tool_Status", "Failure_Reason", "User_Input"]
     for turn_idx in range(MAX_TURNS):
         columns.append(f"Turn{turn_idx+1}_Think")
         columns.append(f"Turn{turn_idx+1}_Tools")
@@ -857,11 +857,94 @@ def _log_conversation_table(
         if img_hist is not None and isinstance(img_hist, (list, tuple)):
             num_tools = max(0, len(img_hist) - 1)
         
-        # 获取退化类别（从reward_extra_infos_dict）
+        # 获取退化类别（从reward_extra_infos_dict - Ground Truth）
         degradation_type = "unknown"
         if reward_extra_infos_dict and 'degradation_type' in reward_extra_infos_dict:
             if idx < len(reward_extra_infos_dict['degradation_type']):
                 degradation_type = reward_extra_infos_dict['degradation_type'][idx]
+        
+        # 提取预测的退化类型（从conversation_history中的tool_call）
+        predicted_degradation_types = []
+        if idx < len(conversation_histories) and conversation_histories[idx] is not None:
+            conv_hist = conversation_histories[idx]
+            if isinstance(conv_hist, list):
+                # 导入映射函数
+                try:
+                    from verl.utils.reward_score.tool_to_degradation_mapping import get_degradation_type_from_tool
+                except ImportError:
+                    # 如果导入失败，使用内联映射
+                    def get_degradation_type_from_tool(tool_name):
+                        tool_map = {
+                            "swinir_denoising": "noise", "mprnet_denoising": "noise",
+                            "restormer_motion_deblurring": "motion blur", "mprnet_motion_deblurring": "motion blur",
+                            "xrestormer_motion_deblurring": "motion blur", "restormer_defocus_deblurring": "defocus blur",
+                            "drbnet_defocus_deblurring": "defocus blur", "restormer_deraining": "rain",
+                            "mprnet_deraining": "rain", "xrestormer_deraining": "rain",
+                            "swinir_jpeg_artifact_removal": "jpeg compression artifact",
+                            "fbcnn_jpeg_artifact_removal": "jpeg compression artifact",
+                            "swinir_super_resolution": "low resolution", "dehazeformer_dehaze": "haze",
+                            "constant_shift": "dark", "gamma_correction": "dark", "histogram_equalization": "dark",
+                        }
+                        return tool_map.get(tool_name, None)
+                
+                # 遍历所有turn，提取工具名称并映射到退化类型
+                for turn in conv_hist:
+                    response = turn.get('response', '')
+                    if '<tool_call>' in response and '</tool_call>' in response:
+                        try:
+                            tool_match = re.search(r'<tool_call>(.*?)</tool_call>', response, re.DOTALL)
+                            if tool_match:
+                                tools = json.loads(tool_match.group(1).strip())
+                                if isinstance(tools, list):
+                                    for tool_dict in tools:
+                                        if isinstance(tool_dict, dict):
+                                            tool_name = tool_dict.get('name', '')
+                                            deg_type = get_degradation_type_from_tool(tool_name)
+                                            if deg_type and deg_type not in predicted_degradation_types:
+                                                predicted_degradation_types.append(deg_type)
+                                elif isinstance(tools, dict):
+                                    tool_name = tools.get('name', '')
+                                    deg_type = get_degradation_type_from_tool(tool_name)
+                                    if deg_type and deg_type not in predicted_degradation_types:
+                                        predicted_degradation_types.append(deg_type)
+                        except Exception as e:
+                            if idx == 0:
+                                print(f"[DEBUG PRED DEG] Failed to extract tool from turn: {e}")
+        
+        # 格式化预测的退化类型
+        if predicted_degradation_types:
+            predicted_degradation_type_str = ", ".join(predicted_degradation_types)
+        else:
+            predicted_degradation_type_str = "none"
+        
+        # 判断预测是否正确（集合匹配，顺序无关）
+        # 需要从degradation_type中提取所有GT类型（可能是"type1, type2"格式）
+        prediction_match = "❓"  # 默认未知
+        if degradation_type and degradation_type.lower() != "unknown":
+            # 解析GT退化类型（可能包含多个，用逗号分隔）
+            gt_types_list = [t.strip() for t in degradation_type.split(',')]
+            gt_types_set = set(gt_types_list)
+            
+            # 解析预测退化类型
+            if predicted_degradation_type_str.lower() == "none":
+                pred_types_set = set()
+            else:
+                pred_types_list = [t.strip() for t in predicted_degradation_type_str.split(',')]
+                pred_types_set = set(pred_types_list)
+            
+            # 集合匹配（顺序无关）
+            if pred_types_set == gt_types_set:
+                prediction_match = "✅"  # 完全匹配
+            elif len(pred_types_set) > 0 and pred_types_set.issubset(gt_types_set):
+                prediction_match = "⚠️"  # 部分正确（预测的都对，但没预测全）
+            elif len(pred_types_set) > 0 and len(pred_types_set & gt_types_set) > 0:
+                prediction_match = "⚠️"  # 部分正确（有交集，但不完全对）
+            else:
+                prediction_match = "❌"  # 完全错误或未预测
+            
+            # 调试信息（第一个样本）
+            if idx == 0:
+                print(f"[DEBUG PRED MATCH] GT: {gt_types_set}, Predicted: {pred_types_set}, Match: {prediction_match}")
         
         # 获取用户输入（增强版，支持多种格式）
         user_input = ""
@@ -990,9 +1073,9 @@ def _log_conversation_table(
             tool_status = "❓ Unknown"
             failure_reason = "状态未知 (请检查日志)"
         
-        # 构建行数据（添加degradation_type、tool_status和failure_reason列）
+        # 构建行数据（添加degradation_type、predicted_degradation_type、prediction_match、tool_status和failure_reason列）
         row = [step, f"{mode}_step{step}_idx{idx}", trajectory_img, quality, num_tools, 
-               degradation_type, tool_status, failure_reason, user_input]
+               degradation_type, predicted_degradation_type_str, prediction_match, tool_status, failure_reason, user_input]
         
         # 提取每个turn的内容
         turn_data = {}
