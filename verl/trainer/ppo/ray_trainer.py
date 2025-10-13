@@ -57,7 +57,12 @@ from verl.utils.torch_functional import masked_mean
 from verl.utils.tracking import ValidationGenerationsLogger
 
 from verl.trainer.ppo.metric_utils import compute_agent_metrics
-from verl.utils.tracking_image_utils import log_rollout_images_to_wandb, extract_image_quality_scores_from_rewards, compute_reference_metrics_for_batch as _compute_reference_metrics_for_batch
+from verl.utils.tracking_image_utils import (
+    log_rollout_images_to_wandb, 
+    extract_image_quality_scores_from_rewards, 
+    compute_reference_metrics_for_batch as _compute_reference_metrics_for_batch,
+    log_validation_wrong_predictions_to_wandb
+)
 
 WorkerType = Type[Worker]
 
@@ -845,6 +850,24 @@ class RayPPOTrainer:
                         system_prompt=system_prompt,
                     )
                     print(f"[DEBUG WANDB IMAGE] Validation: logged {len(val_image_histories)} sample trajectories")
+                    
+                    # 新增：上传预测错误的样本到独立表格
+                    try:
+                        log_validation_wrong_predictions_to_wandb(
+                            wandb_logger=self.logger.logger['wandb'],
+                            batch_data=val_batch_data,
+                            reward_extra_infos_dict=reward_extra_infos_dict,
+                            conversation_histories=val_conversation_histories,
+                            reward_models=val_reward_models,
+                            env_names=val_env_names,
+                            step=self.global_steps,
+                            tokenizer=self.tokenizer,
+                        )
+                    except Exception as e:
+                        print(f"[WARNING] Failed to log wrong predictions to wandb: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        
                 except Exception as e:
                     print(f"[WARNING] Failed to log validation images to wandb: {e}")
                     import traceback

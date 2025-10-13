@@ -1878,3 +1878,318 @@ def extract_image_quality_scores_from_rewards(reward_info: Dict) -> Optional[Lis
     print(f"[DEBUG EXTRACT SCORES] No quality scores found in reward_info keys: {list(reward_info.keys())}")
     return None
 
+
+def log_validation_wrong_predictions_to_wandb(
+    wandb_logger,
+    batch_data: Dict,
+    reward_extra_infos_dict: Dict,
+    conversation_histories: List,
+    reward_models: List,
+    env_names: List,
+    step: int,
+    tokenizer=None,
+):
+    """
+    上传预测错误的验证样本到wandb独立表格
+    
+    Args:
+        wandb_logger: wandb logger实例
+        batch_data: 包含image_history和original_images的batch数据
+        reward_extra_infos_dict: reward额外信息字典
+        conversation_histories: 对话历史列表
+        reward_models: reward_model列表（真实标签）
+        env_names: 环境名称列表
+        step: 当前训练步数
+        tokenizer: tokenizer用于解码response
+    """
+    try:
+        import wandb
+        from PIL import Image
+        import io
+    except ImportError:
+        print("[WARNING] wandb or PIL not available, skipping wrong predictions logging")
+        return
+    
+    # 导入退化类型提取函数
+    try:
+        from verl.utils.degradation_accuracy_utils import (
+            extract_predicted_degradation_types_from_conversation,
+            extract_ground_truth_degradation_info
+        )
+    except ImportError:
+        print("[WARNING] degradation_accuracy_utils not available")
+        return
+    
+    # 工具到退化类型的映射
+    tool_to_degradation = {
+        "swinir_denoising": "noise", "mprnet_denoising": "noise",
+        "restormer_motion_deblurring": "motion blur", "mprnet_motion_deblurring": "motion blur",
+        "xrestormer_motion_deblurring": "motion blur", "restormer_defocus_deblurring": "defocus blur",
+        "drbnet_defocus_deblurring": "defocus blur", "restormer_deraining": "rain",
+        "mprnet_deraining": "rain", "xrestormer_deraining": "rain",
+        "swinir_jpeg_artifact_removal": "jpeg compression artifact",
+        "fbcnn_jpeg_artifact_removal": "jpeg compression artifact",
+        "swinir_super_resolution": "low resolution", "dehazeformer_dehaze": "haze",
+        "constant_shift": "dark", "gamma_correction": "dark", "histogram_equalization": "dark",
+    }
+    
+    # 获取数据
+    image_histories = batch_data.get('image_history', [])
+    original_images = batch_data.get('original_images', [])
+    raw_prompts = batch_data.get('raw_prompt', [])
+    responses = batch_data.get('responses', [])
+    
+    if not image_histories or len(image_histories) == 0:
+        print("[INFO] No image histories to process for wrong predictions")
+        return
+    
+    # 收集预测错误的样本
+    wrong_samples = []
+    
+    for idx in range(len(image_histories)):
+        # 跳过clean样本
+        env_name = env_names[idx] if idx < len(env_names) else ""
+        if env_name and env_name.strip().lower() == "clean":
+            continue
+        
+        # 提取预测的退化类型
+        conv_hist = conversation_histories[idx] if idx < len(conversation_histories) else None
+        predicted_types = extract_predicted_degradation_types_from_conversation(conv_hist)
+        
+        # 提取GT退化类型
+        reward_model = reward_models[idx] if idx < len(reward_models) else []
+        gt_types, gt_levels = extract_ground_truth_degradation_info(reward_model)
+        
+        if not gt_types:
+            continue
+        
+        # 判断预测是否正确（集合匹配，不考虑顺序）
+        predicted_set = set(predicted_types)
+        gt_set = set(gt_types)
+        is_correct = (predicted_set == gt_set)
+        
+        # 只收集预测错误的样本
+        if not is_correct:
+            wrong_samples.append({
+                'idx': idx,
+                'predicted_types': predicted_types,
+                'gt_types': gt_types,
+                'gt_levels': gt_levels,
+                'predicted_set': predicted_set,
+                'gt_set': gt_set,
+            })
+    
+    if len(wrong_samples) == 0:
+        print(f"[INFO] No wrong predictions found at step {step}")
+        return
+    
+    print(f"[INFO] Found {len(wrong_samples)} wrong predictions out of {len(image_histories)} samples")
+    
+    # 创建表格
+    table_columns = [
+        "Step",
+        "Sample_ID", 
+        "Original_Image",      # 原图（GT）
+        "Degraded_Image",      # 退化图（输入）
+        "Restored_Image",      # 复原图（输出）
+        "Image_Path_Original", # 原图路径（用于后处理）
+        "Image_Path_Degraded", # 退化图路径（用于后处理）
+        "Image_Path_Restored", # 复原图路径（用于后处理）
+        "Ground_Truth_Types",  # 真实退化类型
+        "Ground_Truth_Levels", # 真实退化等级
+        "Predicted_Types",     # 预测的退化类型
+        "Missing_Types",       # 漏检的类型
+        "Extra_Types",         # 误检的类型
+        "Quality_Score",       # 图像质量分数
+        "SSIM",               # SSIM指标
+        "LPIPS",              # LPIPS指标
+        "PSNR",               # PSNR指标
+    ]
+    
+    table = wandb.Table(columns=table_columns)
+    
+    # 提取质量分数和指标
+    quality_scores = reward_extra_infos_dict.get('ir_quality_score', 
+                     reward_extra_infos_dict.get('ir_accuracy_score', []))
+    ssim_scores = reward_extra_infos_dict.get('ssim_score_ref', [])
+    lpips_scores = reward_extra_infos_dict.get('lpips_score_ref', [])
+    psnr_scores = reward_extra_infos_dict.get('psnr_score_ref', [])
+    
+    # 处理每个错误样本
+    for sample_info in wrong_samples:
+        idx = sample_info['idx']
+        
+        try:
+            # 1. 获取原图（GT）
+            original_image_pil = None
+            if idx < len(original_images) and original_images[idx] is not None:
+                orig_img_data = original_images[idx]
+                if isinstance(orig_img_data, dict) and 'image' in orig_img_data:
+                    imgs = orig_img_data['image']
+                    if isinstance(imgs, list) and len(imgs) > 0:
+                        original_image_pil = imgs[0]
+                elif hasattr(orig_img_data, 'save'):  # PIL Image
+                    original_image_pil = orig_img_data
+                elif isinstance(orig_img_data, bytes):
+                    original_image_pil = Image.open(io.BytesIO(orig_img_data))
+            
+            # 2. 获取退化图（输入图）
+            degraded_image_pil = None
+            if idx < len(image_histories):
+                img_hist = image_histories[idx]
+                if isinstance(img_hist, (list, tuple)) and len(img_hist) > 0:
+                    first_img = img_hist[0]
+                    if isinstance(first_img, dict) and 'image' in first_img:
+                        imgs = first_img['image']
+                        if isinstance(imgs, list) and len(imgs) > 0:
+                            degraded_image_pil = imgs[0]
+            
+            # 3. 获取复原图（输出图）
+            restored_image_pil = None
+            if idx < len(image_histories):
+                img_hist = image_histories[idx]
+                if isinstance(img_hist, (list, tuple)) and len(img_hist) > 1:
+                    last_img = img_hist[-1]
+                    if isinstance(last_img, dict) and 'image' in last_img:
+                        imgs = last_img['image']
+                        if isinstance(imgs, list) and len(imgs) > 0:
+                            restored_image_pil = imgs[0]
+            
+            # 4. 提取指标
+            quality_score = quality_scores[idx] if idx < len(quality_scores) else 0.0
+            ssim_score = ssim_scores[idx] if idx < len(ssim_scores) else 0.0
+            lpips_score = lpips_scores[idx] if idx < len(lpips_scores) else 0.0
+            psnr_score = psnr_scores[idx] if idx < len(psnr_scores) else 0.0
+            
+            # 5. 计算漏检和误检
+            predicted_set = sample_info['predicted_set']
+            gt_set = sample_info['gt_set']
+            missing_types = gt_set - predicted_set  # 漏检
+            extra_types = predicted_set - gt_set    # 误检
+            
+            # 6. 格式化文本
+            gt_types_str = ", ".join(sample_info['gt_types']) if sample_info['gt_types'] else "None"
+            gt_levels_str = ", ".join(sample_info['gt_levels']) if sample_info['gt_levels'] else "None"
+            pred_types_str = ", ".join(sample_info['predicted_types']) if sample_info['predicted_types'] else "None"
+            missing_str = ", ".join(missing_types) if missing_types else "None"
+            extra_str = ", ".join(extra_types) if extra_types else "None"
+            
+            # 7. 创建wandb.Image对象（分别存储，不拼接）
+            original_wandb_img = wandb.Image(original_image_pil) if original_image_pil else None
+            degraded_wandb_img = wandb.Image(degraded_image_pil) if degraded_image_pil else None
+            restored_wandb_img = wandb.Image(restored_image_pil) if restored_image_pil else None
+            
+            # 8. 生成图片路径（用于后处理）
+            sample_id = f"step{step}_sample{idx}"
+            img_path_original = f"val_error_images/{sample_id}/original" if original_image_pil else "N/A"
+            img_path_degraded = f"val_error_images/{sample_id}/degraded" if degraded_image_pil else "N/A"
+            img_path_restored = f"val_error_images/{sample_id}/restored" if restored_image_pil else "N/A"
+            
+            # 9. 添加到表格
+            table.add_data(
+                step,                           # Step
+                sample_id,                      # Sample_ID
+                original_wandb_img,            # Original_Image
+                degraded_wandb_img,            # Degraded_Image  
+                restored_wandb_img,            # Restored_Image
+                img_path_original,             # Image_Path_Original
+                img_path_degraded,             # Image_Path_Degraded
+                img_path_restored,             # Image_Path_Restored
+                gt_types_str,                  # Ground_Truth_Types
+                gt_levels_str,                 # Ground_Truth_Levels
+                pred_types_str,                # Predicted_Types
+                missing_str,                   # Missing_Types
+                extra_str,                     # Extra_Types
+                f"{quality_score:.4f}",        # Quality_Score
+                f"{ssim_score:.4f}",          # SSIM
+                f"{lpips_score:.4f}",         # LPIPS
+                f"{psnr_score:.2f}",          # PSNR
+            )
+            
+        except Exception as e:
+            print(f"[WARNING] Failed to process wrong prediction sample {idx}: {e}")
+            continue
+    
+    # 上传表格到wandb（使用新的命名空间）
+    try:
+        # 准备上传数据
+        log_data = {
+            "val_errors/wrong_predictions": table,
+            "val_errors/wrong_count": len(wrong_samples),
+            "val_errors/total_samples": len(image_histories),
+            "val_errors/error_rate": len(wrong_samples) / max(len(image_histories), 1),
+        }
+        
+        # 额外上传单独的图片到 Media（作为 PNG 文件存储）
+        # 为每个错误样本创建三张图片：原图、退化图、复原图
+        for i, sample_info in enumerate(wrong_samples):
+            idx = sample_info['idx']
+            sample_id = f"step{step}_sample{idx}"
+            
+            try:
+                # 获取图片（与上面的代码重复，但为了清晰性保留）
+                original_image_pil = None
+                degraded_image_pil = None
+                restored_image_pil = None
+                
+                # 原图
+                if idx < len(original_images) and original_images[idx] is not None:
+                    orig_img_data = original_images[idx]
+                    if isinstance(orig_img_data, dict) and 'image' in orig_img_data:
+                        imgs = orig_img_data['image']
+                        if isinstance(imgs, list) and len(imgs) > 0:
+                            original_image_pil = imgs[0]
+                    elif hasattr(orig_img_data, 'save'):
+                        original_image_pil = orig_img_data
+                    elif isinstance(orig_img_data, bytes):
+                        original_image_pil = Image.open(io.BytesIO(orig_img_data))
+                
+                # 退化图
+                if idx < len(image_histories):
+                    img_hist = image_histories[idx]
+                    if isinstance(img_hist, (list, tuple)) and len(img_hist) > 0:
+                        first_img = img_hist[0]
+                        if isinstance(first_img, dict) and 'image' in first_img:
+                            imgs = first_img['image']
+                            if isinstance(imgs, list) and len(imgs) > 0:
+                                degraded_image_pil = imgs[0]
+                
+                # 复原图
+                if idx < len(image_histories):
+                    img_hist = image_histories[idx]
+                    if isinstance(img_hist, (list, tuple)) and len(img_hist) > 1:
+                        last_img = img_hist[-1]
+                        if isinstance(last_img, dict) and 'image' in last_img:
+                            imgs = last_img['image']
+                            if isinstance(imgs, list) and len(imgs) > 0:
+                                restored_image_pil = imgs[0]
+                
+                # 上传原图（如果存在）- 放到独立的命名空间
+                # 不添加 caption，保持图片原样
+                if original_image_pil:
+                    log_data[f"val_error_images/{sample_id}/original"] = wandb.Image(original_image_pil)
+                
+                # 上传退化图（如果存在）
+                if degraded_image_pil:
+                    log_data[f"val_error_images/{sample_id}/degraded"] = wandb.Image(degraded_image_pil)
+                
+                # 上传复原图（如果存在）
+                if restored_image_pil:
+                    log_data[f"val_error_images/{sample_id}/restored"] = wandb.Image(restored_image_pil)
+                    
+            except Exception as e:
+                print(f"[WARNING] Failed to prepare images for sample {idx}: {e}")
+                continue
+        
+        # 一次性上传所有数据（表格 + 图片）
+        wandb_logger.log(log_data, step=step)
+        
+        print(f"[INFO] Uploaded {len(wrong_samples)} wrong predictions to wandb at step {step}")
+        print(f"[INFO] - Table: val_errors/wrong_predictions")
+        print(f"[INFO] - Images: val_error_images/step{step}_sampleX/{{original,degraded,restored}}")
+        print(f"[INFO] Error rate: {len(wrong_samples)}/{len(image_histories)} = {len(wrong_samples)/max(len(image_histories), 1):.2%}")
+    except Exception as e:
+        print(f"[WARNING] Failed to upload wrong predictions to wandb: {e}")
+        import traceback
+        traceback.print_exc()
+

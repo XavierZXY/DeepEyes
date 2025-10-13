@@ -106,6 +106,12 @@ class ImageQualityMetrics:
         if HAS_LPIPS:
             try:
                 self._lpips_model = lpips.LPIPS(net=lpips_net)
+                # 如果 GPU 可用，将模型移动到 GPU 并保持在 GPU 上
+                if torch.cuda.is_available():
+                    self._lpips_model = self._lpips_model.cuda()
+                    print(f"[INFO] LPIPS model initialized on GPU: {next(self._lpips_model.parameters()).device}")
+                else:
+                    print(f"[INFO] LPIPS model initialized on CPU (GPU not available)")
             except Exception as e:
                 print(f"[WARNING] Failed to initialize LPIPS model: {e}")
                 self._lpips_model = None
@@ -115,6 +121,12 @@ class ImageQualityMetrics:
             try:
                 self._clip_processor = CLIPProcessor.from_pretrained(clip_model_name)
                 self._clip_model = CLIPModel.from_pretrained(clip_model_name)
+                # 如果 GPU 可用，将 CLIP 模型也移到 GPU
+                if torch.cuda.is_available():
+                    self._clip_model = self._clip_model.cuda()
+                    print(f"[INFO] CLIP model initialized on GPU")
+                else:
+                    print(f"[INFO] CLIP model initialized on CPU")
             except Exception as e:
                 print(f"[WARNING] Failed to initialize CLIP model: {e}")
                 self._clip_model = None
@@ -123,37 +135,40 @@ class ImageQualityMetrics:
         # 初始化PyIQA模型（统一使用pyiqa实现所有无参考指标）
         if HAS_PYIQA:
             try:
+                # 确定设备
+                device = 'cuda' if torch.cuda.is_available() else 'cpu'
+                
                 # 初始化NIQE
                 try:
-                    self._pyiqa_models['niqe'] = pyiqa.create_metric('niqe')
+                    self._pyiqa_models['niqe'] = pyiqa.create_metric('niqe', device=device)
                 except Exception as e:
                     print(f"[WARNING] NIQE模型初始化失败: {e}")
                 
                 # 初始化BRISQUE
                 try:
-                    self._pyiqa_models['brisque'] = pyiqa.create_metric('brisque')
+                    self._pyiqa_models['brisque'] = pyiqa.create_metric('brisque', device=device)
                 except Exception as e:
                     print(f"[WARNING] BRISQUE模型初始化失败: {e}")
                 
                 # 初始化CLIP-IQA - 使用标准名称
                 try:
-                    self._pyiqa_models['clipiqa'] = pyiqa.create_metric('clipiqa')
+                    self._pyiqa_models['clipiqa'] = pyiqa.create_metric('clipiqa', device=device)
                 except Exception as e:
                     print(f"[WARNING] CLIP-IQA模型初始化失败: {e}")
                 
                 # 初始化Hyper-IQA - 使用标准名称
                 try:
-                    self._pyiqa_models['hyperiqa'] = pyiqa.create_metric('hyperiqa')
+                    self._pyiqa_models['hyperiqa'] = pyiqa.create_metric('hyperiqa', device=device)
                 except Exception as e:
                     print(f"[WARNING] Hyper-IQA模型初始化失败: {e}")
                 
                 # 初始化CPBD（PyIQA中不存在，使用自定义实现）
                 try:
-                    self._pyiqa_models['cpbd'] = pyiqa.create_metric('cpbd')
+                    self._pyiqa_models['cpbd'] = pyiqa.create_metric('cpbd', device=device)
                 except:
                     pass  # CPBD使用自定义实现
                 
-                print(f"[INFO] PyIQA模型初始化完成，成功加载: {list(self._pyiqa_models.keys())}")
+                print(f"[INFO] PyIQA模型初始化完成（device={device}），成功加载: {list(self._pyiqa_models.keys())}")
                 
             except Exception as e:
                 print(f"[WARNING] Failed to initialize PyIQA models: {e}")
@@ -389,36 +404,32 @@ class ImageQualityMetrics:
             # 处理图像尺寸不匹配的情况
             image1, image2 = self._handle_size_mismatch(image1, image2, "LPIPS")
             
-            # 转换为LPIPS所需的张量格式（保持在CPU）
+            # 转换为LPIPS所需的张量格式
             tensor1 = self._normalize_image_for_lpips(image1)
             tensor2 = self._normalize_image_for_lpips(image2)
             
-            # 临时移到GPU计算，然后立即清理
+            # 使用 GPU 加速计算（模型保持在 GPU）
             with torch.no_grad():
-                # 检查是否需要移到GPU
-                if torch.cuda.is_available() and self._lpips_model is not None:
-                    # 临时移动模型和数据到GPU
-                    model_device = 'cuda' if torch.cuda.is_available() else 'cpu'
-                    model_on_gpu = self._lpips_model.to(model_device)
-                    tensor1_gpu = tensor1.to(model_device)
-                    tensor2_gpu = tensor2.to(model_device)
+                # 检查模型所在设备
+                if self._lpips_model is not None:
+                    model_device = next(self._lpips_model.parameters()).device
+                    
+                    # 将输入数据移动到模型所在设备
+                    tensor1 = tensor1.to(model_device)
+                    tensor2 = tensor2.to(model_device)
                     
                     # 计算LPIPS
-                    lpips_value = model_on_gpu(tensor1_gpu, tensor2_gpu)
-                    result = float(lpips_value.item())
-                    
-                    # 立即清理GPU内存
-                    del tensor1_gpu, tensor2_gpu, lpips_value
-                    # 将模型移回CPU以释放GPU内存
-                    self._lpips_model = self._lpips_model.cpu()
-                    torch.cuda.empty_cache()
-                else:
-                    # CPU计算
                     lpips_value = self._lpips_model(tensor1, tensor2)
                     result = float(lpips_value.item())
-                
-                # 清理CPU tensor
-                del tensor1, tensor2
+                    
+                    # 清理输入tensor（模型保持在GPU）
+                    del tensor1, tensor2, lpips_value
+                    
+                    # 只在 GPU 上清理缓存（不移动模型）
+                    if model_device.type == 'cuda':
+                        torch.cuda.empty_cache()
+                else:
+                    result = 0.0
                 
             return result
         except Exception as e:
@@ -661,8 +672,12 @@ class ImageQualityMetrics:
                     image_tensor = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).float() / 255.0
                 
                 with torch.no_grad():
+                    # PyIQA 模型会自动处理设备，但我们可以显式移动以提高性能
                     clipiqa_score = self._pyiqa_models['clipiqa'](image_tensor)
-                    return float(clipiqa_score.item())
+                    result = float(clipiqa_score.item())
+                    # 清理 tensor
+                    del image_tensor, clipiqa_score
+                    return result
             else:
                 print("[WARNING] CLIP-IQA calculation requires pyiqa")
                 return 0.5  # 返回中等质量分数
@@ -692,9 +707,12 @@ class ImageQualityMetrics:
                     image_tensor = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).float() / 255.0
                 
                 with torch.no_grad():
+                    # PyIQA 模型会自动处理设备
                     hyperiqa_score = self._pyiqa_models['hyperiqa'](image_tensor)
-                    # Hyper-IQA通常输出范围[0, 1]，值越大质量越好
-                    return float(hyperiqa_score.item())
+                    result = float(hyperiqa_score.item())
+                    # 清理 tensor
+                    del image_tensor, hyperiqa_score
+                    return result
             else:
                 print("[WARNING] Hyper-IQA calculation requires pyiqa")
                 return 0.5  # 返回中等质量分数
