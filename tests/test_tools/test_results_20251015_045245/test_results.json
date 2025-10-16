@@ -1,0 +1,662 @@
+{
+  "defocus_blur": {
+    "degradation_type": "defocus_blur",
+    "tools": {
+      "restormer_defocus_deblurring": {
+        "display_name": "Restormer",
+        "levels": {
+          "high": {
+            "metrics": {
+              "psnr": 25.997295267633575,
+              "ssim": 0.7703835303309465,
+              "lpips": 0.3150844141840935,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 7.52701194935979,
+              "ssim": 22.360380497213217,
+              "lpips": 43.38714607751296
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "low": {
+            "metrics": {
+              "psnr": 26.743405019362626,
+              "ssim": 0.8629455957991261,
+              "lpips": 0.22808453515172006,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 4.230016108413526,
+              "ssim": 8.341549301865744,
+              "lpips": 35.76109181299107
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "medium": {
+            "metrics": {
+              "psnr": 28.486881393072224,
+              "ssim": 0.8528491109343534,
+              "lpips": 0.2421545833349228,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 9.33256728841351,
+              "ssim": 18.666865552280132,
+              "lpips": 46.74699625713159
+            },
+            "num_samples": 10,
+            "success_count": 10
+          }
+        }
+      },
+      "drbnet_defocus_deblurring": {
+        "display_name": "DRBNet",
+        "levels": {
+          "high": {
+            "metrics": {
+              "psnr": 0.0,
+              "ssim": 0.0,
+              "lpips": 0.0,
+              "success_rate": 0.0
+            },
+            "improvement": {
+              "psnr": -100.0,
+              "ssim": -100.0,
+              "lpips": 100.0
+            },
+            "num_samples": 10,
+            "success_count": 0
+          },
+          "low": {
+            "metrics": {
+              "psnr": 0.0,
+              "ssim": 0.0,
+              "lpips": 0.0,
+              "success_rate": 0.0
+            },
+            "improvement": {
+              "psnr": -100.0,
+              "ssim": -100.0,
+              "lpips": 100.0
+            },
+            "num_samples": 10,
+            "success_count": 0
+          },
+          "medium": {
+            "metrics": {
+              "psnr": 0.0,
+              "ssim": 0.0,
+              "lpips": 0.0,
+              "success_rate": 0.0
+            },
+            "improvement": {
+              "psnr": -100.0,
+              "ssim": -100.0,
+              "lpips": 100.0
+            },
+            "num_samples": 10,
+            "success_count": 0
+          }
+        }
+      }
+    },
+    "baseline": {
+      "high": {
+        "psnr": 24.17745531688083,
+        "ssim": 0.6296021042109232,
+        "lpips": 0.5565598487854004
+      },
+      "low": {
+        "psnr": 25.658064747438793,
+        "ssim": 0.7965047586635032,
+        "lpips": 0.35505668073892593
+      },
+      "medium": {
+        "psnr": 26.055257001260514,
+        "ssim": 0.7186918664828308,
+        "lpips": 0.4547247409820557
+      }
+    }
+  },
+  "haze": {
+    "degradation_type": "haze",
+    "tools": {
+      "dehazeformer_dehaze": {
+        "display_name": "DehazeFormer",
+        "levels": {
+          "high": {
+            "metrics": {
+              "psnr": 0.0,
+              "ssim": 0.0,
+              "lpips": 0.0,
+              "success_rate": 0.0
+            },
+            "improvement": {
+              "psnr": -100.0,
+              "ssim": -100.0,
+              "lpips": 100.0
+            },
+            "num_samples": 10,
+            "success_count": 0
+          },
+          "low": {
+            "metrics": {
+              "psnr": 0.0,
+              "ssim": 0.0,
+              "lpips": 0.0,
+              "success_rate": 0.0
+            },
+            "improvement": {
+              "psnr": -100.0,
+              "ssim": -100.0,
+              "lpips": 100.0
+            },
+            "num_samples": 10,
+            "success_count": 0
+          },
+          "medium": {
+            "metrics": {
+              "psnr": 0.0,
+              "ssim": 0.0,
+              "lpips": 0.0,
+              "success_rate": 0.0
+            },
+            "improvement": {
+              "psnr": -100.0,
+              "ssim": -100.0,
+              "lpips": 100.0
+            },
+            "num_samples": 10,
+            "success_count": 0
+          }
+        }
+      }
+    },
+    "baseline": {
+      "high": {
+        "psnr": 12.193291303522027,
+        "ssim": 0.780382762887136,
+        "lpips": 0.17927597388625144
+      },
+      "low": {
+        "psnr": 25.555856699806746,
+        "ssim": 0.946222659561462,
+        "lpips": 0.028343366598710416
+      },
+      "medium": {
+        "psnr": 17.54066762887529,
+        "ssim": 0.8701012672808967,
+        "lpips": 0.09036924205720424
+      }
+    }
+  },
+  "motion_blur": {
+    "degradation_type": "motion_blur",
+    "tools": {
+      "restormer_motion_deblurring": {
+        "display_name": "Restormer",
+        "levels": {
+          "high": {
+            "metrics": {
+              "psnr": 20.413116656735447,
+              "ssim": 0.5280990370576466,
+              "lpips": 0.26660009771585463,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": -5.040427264671335,
+              "ssim": -15.107122565588577,
+              "lpips": 32.9482809158349
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "low": {
+            "metrics": {
+              "psnr": 23.286762986718415,
+              "ssim": 0.7618193922276832,
+              "lpips": 0.17412631437182427,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": -2.6625164839690694,
+              "ssim": -3.5286641596079478,
+              "lpips": 28.319118377269547
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "medium": {
+            "metrics": {
+              "psnr": 22.547896520109216,
+              "ssim": 0.6418548258878845,
+              "lpips": 0.2007542334496975,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": -4.1341925763894976,
+              "ssim": -9.369807676071542,
+              "lpips": 35.8661108575619
+            },
+            "num_samples": 10,
+            "success_count": 10
+          }
+        }
+      },
+      "mprnet_motion_deblurring": {
+        "display_name": "MPRNet",
+        "levels": {
+          "high": {
+            "metrics": {
+              "psnr": 20.13397543292873,
+              "ssim": 0.5242330501318875,
+              "lpips": 0.28439639806747435,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": -6.338961525325574,
+              "ssim": -15.72858697135624,
+              "lpips": 28.472391588944866
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "low": {
+            "metrics": {
+              "psnr": 23.0451062756177,
+              "ssim": 0.7545064562448942,
+              "lpips": 0.18994369432330133,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": -3.672629231143068,
+              "ssim": -4.454721845159854,
+              "lpips": 21.807731835988456
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "medium": {
+            "metrics": {
+              "psnr": 22.234019936667533,
+              "ssim": 0.6322404313904233,
+              "lpips": 0.22154750153422356,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": -5.468686553517943,
+              "ssim": -10.727364536655507,
+              "lpips": 29.223395895458076
+            },
+            "num_samples": 10,
+            "success_count": 10
+          }
+        }
+      },
+      "xrestormer_motion_deblurring": {
+        "display_name": "XRestormer",
+        "levels": {
+          "high": {
+            "metrics": {
+              "psnr": 20.015035840603453,
+              "ssim": 0.5726707973976122,
+              "lpips": 0.4200286865234375,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": -6.892255422502011,
+              "ssim": -7.942131300581553,
+              "lpips": -5.6400419105528705
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "low": {
+            "metrics": {
+              "psnr": 18.725162331360792,
+              "ssim": 0.6424568449185759,
+              "lpips": 0.3537896081805229,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": -21.729774945389057,
+              "ssim": -18.64387979431326,
+              "lpips": -45.64111756932585
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "medium": {
+            "metrics": {
+              "psnr": 21.0813343730232,
+              "ssim": 0.6443467284232975,
+              "lpips": 0.34404484629631044,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": -10.369504337817776,
+              "ssim": -9.017949908663523,
+              "lpips": -9.910180489038028
+            },
+            "num_samples": 10,
+            "success_count": 10
+          }
+        }
+      }
+    },
+    "baseline": {
+      "high": {
+        "psnr": 21.496639115711787,
+        "ssim": 0.622076966899441,
+        "lpips": 0.39760367274284364
+      },
+      "low": {
+        "psnr": 23.92373641227659,
+        "ssim": 0.7896847136936953,
+        "lpips": 0.24291876778006555
+      },
+      "medium": {
+        "psnr": 23.520269766753106,
+        "ssim": 0.7082130241915199,
+        "lpips": 0.3130236387252808
+      }
+    }
+  },
+  "noise": {
+    "degradation_type": "noise",
+    "tools": {
+      "swinir_denoising": {
+        "display_name": "SwinIR",
+        "levels": {
+          "high": {
+            "metrics": {
+              "psnr": 22.79165095273206,
+              "ssim": 0.5490663579241597,
+              "lpips": 0.5243046805262566,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 30.703610021897852,
+              "ssim": 87.7655611861784,
+              "lpips": 36.303320210172174
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "low": {
+            "metrics": {
+              "psnr": 32.896680008390504,
+              "ssim": 0.9171856983367469,
+              "lpips": 0.19073468446731567,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 3.847334330175938,
+              "ssim": 13.762461482494803,
+              "lpips": -37.57278994139634
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "medium": {
+            "metrics": {
+              "psnr": 30.685417237194294,
+              "ssim": 0.8034358782131396,
+              "lpips": 0.20302583202719687,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 50.728734389164984,
+              "ssim": 111.10599407228818,
+              "lpips": 67.94322562009009
+            },
+            "num_samples": 10,
+            "success_count": 10
+          }
+        }
+      },
+      "mprnet_denoising": {
+        "display_name": "MPRNet",
+        "levels": {
+          "high": {
+            "metrics": {
+              "psnr": 25.204801528605174,
+              "ssim": 0.7659921995602205,
+              "lpips": 0.36511746793985367,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 44.54233949556196,
+              "ssim": 161.94822017218945,
+              "lpips": 55.64264195067983
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "low": {
+            "metrics": {
+              "psnr": 30.39381260862665,
+              "ssim": 0.9172006905343528,
+              "lpips": 0.1771522969007492,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": -4.053648613424506,
+              "ssim": 13.764321028828522,
+              "lpips": -27.776108457813947
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "medium": {
+            "metrics": {
+              "psnr": 26.899182677788197,
+              "ssim": 0.8073919429161315,
+              "lpips": 0.3127917766571045,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 32.13050778437726,
+              "ssim": 112.14546591364632,
+              "lpips": 50.61172604457168
+            },
+            "num_samples": 10,
+            "success_count": 10
+          }
+        }
+      }
+    },
+    "baseline": {
+      "high": {
+        "psnr": 17.43765986946618,
+        "ssim": 0.2924212270107054,
+        "lpips": 0.8231271743774414
+      },
+      "low": {
+        "psnr": 31.677924349793727,
+        "ssim": 0.8062287738718442,
+        "lpips": 0.13864273927174509
+      },
+      "medium": {
+        "psnr": 20.358040795305776,
+        "ssim": 0.3805841145079103,
+        "lpips": 0.6333320677280426
+      }
+    }
+  },
+  "rain": {
+    "degradation_type": "rain",
+    "tools": {
+      "restormer_deraining": {
+        "display_name": "Restormer",
+        "levels": {
+          "high": {
+            "metrics": {
+              "psnr": 34.946690301115794,
+              "ssim": 0.9553691801633122,
+              "lpips": 0.10646253675222397,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 67.75258998817478,
+              "ssim": 49.66050165512766,
+              "lpips": 77.30353134963555
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "low": {
+            "metrics": {
+              "psnr": 31.366859961764966,
+              "ssim": 0.9582406798511945,
+              "lpips": 0.14173104092478753,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 22.868613166865625,
+              "ssim": 12.231451494587112,
+              "lpips": 48.282698685507256
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "medium": {
+            "metrics": {
+              "psnr": 36.30185838944287,
+              "ssim": 0.9649794575002808,
+              "lpips": 0.09041703827679157,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 68.61129918146727,
+              "ssim": 43.64636761222711,
+              "lpips": 79.80820654680036
+            },
+            "num_samples": 10,
+            "success_count": 10
+          }
+        }
+      },
+      "mprnet_deraining": {
+        "display_name": "MPRNet",
+        "levels": {
+          "high": {
+            "metrics": {
+              "psnr": 32.86546927022722,
+              "ssim": 0.9385335617326959,
+              "lpips": 0.1343361295759678,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 57.76222422646286,
+              "ssim": 47.023168200881585,
+              "lpips": 71.36123328877416
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "low": {
+            "metrics": {
+              "psnr": 27.491546274558452,
+              "ssim": 0.8947435260665493,
+              "lpips": 0.23045405372977257,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 7.688438329025581,
+              "ssim": 4.794512231966357,
+              "lpips": 15.90789386628633
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "medium": {
+            "metrics": {
+              "psnr": 32.26087821570362,
+              "ssim": 0.9277963449859638,
+              "lpips": 0.16148617155849934,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 49.84215216559784,
+              "ssim": 38.11130776438902,
+              "lpips": 63.937157378731094
+            },
+            "num_samples": 10,
+            "success_count": 10
+          }
+        }
+      },
+      "xrestormer_deraining": {
+        "display_name": "XRestormer",
+        "levels": {
+          "high": {
+            "metrics": {
+              "psnr": 34.50059298764178,
+              "ssim": 0.9501154099912501,
+              "lpips": 0.11848468147218227,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 65.61121467974841,
+              "ssim": 48.83748800149782,
+              "lpips": 74.74056188572243
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "low": {
+            "metrics": {
+              "psnr": 31.172076261129394,
+              "ssim": 0.9540669128433577,
+              "lpips": 0.14291190654039382,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 22.10561670519315,
+              "ssim": 11.742609871246202,
+              "lpips": 47.85180378446265
+            },
+            "num_samples": 10,
+            "success_count": 10
+          },
+          "medium": {
+            "metrics": {
+              "psnr": 35.96497615752646,
+              "ssim": 0.9621570782686059,
+              "lpips": 0.09794570952653885,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": 67.04658174509774,
+              "ssim": 43.22622962742014,
+              "lpips": 78.12691530181873
+            },
+            "num_samples": 10,
+            "success_count": 10
+          }
+        }
+      }
+    },
+    "baseline": {
+      "high": {
+        "psnr": 20.83228062444774,
+        "ssim": 0.638357595756849,
+        "lpips": 0.46907093077898027
+      },
+      "low": {
+        "psnr": 25.528781641871554,
+        "ssim": 0.8538076155037612,
+        "lpips": 0.2740495681762695
+      },
+      "medium": {
+        "psnr": 21.529908473318347,
+        "ssim": 0.6717743536023407,
+        "lpips": 0.44779102206230165
+      }
+    }
+  }
+}

@@ -1,0 +1,226 @@
+================================================================================
+Baseline测试框架 - 完整功能总结
+================================================================================
+
+版本: v1.1 (增强统计版)
+代码行数: 951行
+文档数量: 11个
+状态: ✅ 完成并验证
+
+================================================================================
+📊 总体统计指标（已实现）
+================================================================================
+
+对于每个策略，现在提供以下统计：
+
+1. 基本统计
+   ✅ Mean (平均值) - 总体趋势
+   ✅ Std (标准差) - 稳定性评估 ⭐ 新增
+   ✅ Median (中位数) - 典型表现 ⭐ 新增
+   ✅ Min (最小值) - 最差情况 ⭐ 新增  
+   ✅ Max (最大值) - 最佳情况 ⭐ 新增
+
+2. 质量指标（三种）
+   ✅ PSNR - 退化图vs原图，修复图vs原图
+   ✅ SSIM - 退化图vs原图，修复图vs原图
+   ✅ LPIPS - 退化图vs原图，修复图vs原图
+
+3. 成功率统计
+   ✅ Tool Success Rate - 工具调用成功比例 ⭐ 新增
+   ✅ 成功步数/总步数
+
+4. 分组统计
+   ✅ 按退化类型分组 ⭐ 新增
+   ✅ 每种退化的修复效果
+   ✅ 不同策略在特定退化上的表现
+
+5. 策略对比
+   ✅ RANDOM vs REVERSE 自动对比 ⭐ 新增
+   ✅ 自动判断优胜者
+   ✅ 显示差异值和意义
+
+================================================================================
+📁 输出文件（5个统计文件）
+================================================================================
+
+运行测试后，在results/目录生成：
+
+1. summary_<timestamp>.txt
+   - 总体统计摘要
+   - 包含所有新增指标
+   - 策略对比摘要
+   
+2. detailed_stats_<timestamp>.txt ⭐ 新增
+   - 按退化类型的详细统计
+   - 每种退化在不同策略下的表现
+   - 退化类型修复难度排序
+
+3. statistics_<timestamp>.csv ⭐ 新增
+   - CSV格式的总体统计
+   - 列：strategy, metric, mean, std, median, min, max, samples
+   - 便于Excel/pandas分析
+
+4. by_degradation_<timestamp>.csv ⭐ 新增
+   - CSV格式的分组统计
+   - 列：degradation_type, strategy, metric, mean_improvement, sample_count
+   - 便于数据透视和可视化
+
+5. results_<timestamp>.json
+   - 所有样本的原始详细数据
+   - 包含修复日志等
+
+================================================================================
+📈 统计报告示例
+================================================================================
+
+summary_<timestamp>.txt 内容示例:
+----------------------------------------
+
+RANDOM Strategy:
+  Samples tested: 10
+
+  Average Degraded Metrics:
+    PSNR: 27.4595 (±2.3456)
+    SSIM: 0.7768 (±0.0523)
+    LPIPS: 0.3501 (±0.0892)
+
+  Average Restored Metrics:
+    PSNR: 26.9817 (±2.1234)
+    SSIM: 0.8098 (±0.0456)
+    LPIPS: 0.3055 (±0.0734)
+
+  Average Improvements:
+    PSNR: +1.2345 (±0.5678)
+    SSIM: +0.0456 (±0.0234)
+    LPIPS: +0.0678 (±0.0345)
+
+  Median Improvements:
+    PSNR: +1.3456
+    SSIM: +0.0489
+    LPIPS: +0.0702
+
+  Best Improvements:
+    PSNR: +5.6789
+    SSIM: +0.1234
+    LPIPS: +0.2345
+
+  Worst Improvements:
+    PSNR: -2.3456
+    SSIM: -0.0234
+    LPIPS: -0.0567
+
+  Tool Success Rate: 95.5% (42/44 steps)
+
+STRATEGY COMPARISON SUMMARY:
+RANDOM vs REVERSE:
+  PSNR: random=+1.23, reverse=+1.56, diff=+0.33 → reverse wins
+  SSIM: random=+0.05, reverse=+0.06, diff=+0.01 → reverse wins
+  LPIPS: random=+0.07, reverse=+0.08, diff=+0.01 → reverse wins
+
+================================================================================
+🔍 快速查看命令
+================================================================================
+
+# 查看总体摘要（增强版）
+cat results/summary_*.txt
+
+# 查看详细统计（按退化类型）
+cat results/detailed_stats_*.txt
+
+# 查看CSV（使用pandas）
+python3 << 'PYEOF'
+import pandas as pd
+df = pd.read_csv('results/statistics_*.csv')
+print(df)
+PYEOF
+
+# 查看特定退化类型
+grep -A 10 "motion blur" results/detailed_stats_*.txt
+
+# 用Excel打开CSV
+# 直接双击 statistics_*.csv 或 by_degradation_*.csv
+
+================================================================================
+📊 使用pandas分析示例
+================================================================================
+
+# 读取并分析统计数据
+python3 << 'PYEOF'
+import pandas as pd
+import numpy as np
+
+# 1. 读取总体统计
+stats = pd.read_csv('results/statistics_20251015_123456.csv')
+print("总体统计：")
+print(stats)
+
+# 2. 策略对比
+print("\n策略对比（PSNR）：")
+psnr_data = stats[stats['metric'] == 'psnr']
+for _, row in psnr_data.iterrows():
+    print(f"  {row['strategy']}: {row['mean']:.4f} ± {row['std']:.4f}")
+
+# 3. 按退化类型分析
+deg_stats = pd.read_csv('results/by_degradation_20251015_123456.csv')
+print("\n各退化类型的平均改善（PSNR）：")
+psnr_by_deg = deg_stats[deg_stats['metric'] == 'psnr']
+avg_by_deg = psnr_by_deg.groupby('degradation_type')['mean_improvement'].mean()
+print(avg_by_deg.sort_values(ascending=False))
+
+# 4. 找出最需要改进的
+print("\n需要重点改进的退化类型：")
+print(avg_by_deg.sort_values().head(3))
+PYEOF
+
+================================================================================
+🎯 关键指标说明
+================================================================================
+
+Mean (平均值):
+  - 所有样本的算术平均
+  - 反映总体趋势
+  - 会受极端值影响
+
+Std (标准差):
+  - 数据的离散程度
+  - 值越小越稳定
+  - 大标准差表示结果不一致
+
+Median (中位数):
+  - 排序后的中间值
+  - 不受极端值影响
+  - median > mean 说明有拖后腿的样本
+
+Min/Max:
+  - 极端情况的表现
+  - Min < 0 表示有变差的样本
+  - Max显示最佳可能效果
+
+Success Rate:
+  - 工具调用成功的比例
+  - >95% 良好
+  - <90% 需要检查工具服务
+
+================================================================================
+📖 相关文档
+================================================================================
+
+详细使用说明:
+  - STATISTICS_GUIDE.md     ⭐ 推荐阅读：统计报告详细指南
+  - UPDATES.md              v1.1新功能说明
+  - BUG_FIX_NOTES.md        Bug修复详情
+
+入门指南:
+  - 00_START_HERE.md        3分钟快速开始
+  - READY_TO_USE.md         验证和使用
+  - USAGE_EXAMPLES.md       实际场景示例
+
+技术参考:
+  - README.md               完整API文档
+  - PROJECT_SUMMARY.md      项目架构
+  - INDEX.md                文档导航
+
+================================================================================
+
+总计: 20个文件，951行代码，11个文档
+

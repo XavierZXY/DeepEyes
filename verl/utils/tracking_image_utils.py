@@ -930,52 +930,67 @@ def _log_conversation_table(
         degradation_type = ", ".join([t for t in degradation_types_list if t != "none"]) if degradation_types_list else "unknown"
         
         # 提取预测的退化类型（从conversation_history中的tool_call）
+        # 使用统一的提取函数，支持新格式（degradation字段）和旧格式（工具名称映射）
         predicted_degradation_types = []
         if idx < len(conversation_histories) and conversation_histories[idx] is not None:
             conv_hist = conversation_histories[idx]
-            if isinstance(conv_hist, list):
-                # 导入映射函数
-                try:
-                    from verl.utils.reward_score.tool_to_degradation_mapping import get_degradation_type_from_tool
-                except ImportError:
-                    # 如果导入失败，使用内联映射
-                    def get_degradation_type_from_tool(tool_name):
-                        tool_map = {
-                            "swinir_denoising": "noise", "mprnet_denoising": "noise",
-                            "restormer_motion_deblurring": "motion blur", "mprnet_motion_deblurring": "motion blur",
-                            "xrestormer_motion_deblurring": "motion blur", "restormer_defocus_deblurring": "defocus blur",
-                            "drbnet_defocus_deblurring": "defocus blur", "restormer_deraining": "rain",
-                            "mprnet_deraining": "rain", "xrestormer_deraining": "rain",
-                            "swinir_jpeg_artifact_removal": "jpeg compression artifact",
-                            "fbcnn_jpeg_artifact_removal": "jpeg compression artifact",
-                            "swinir_super_resolution": "low resolution", "dehazeformer_dehaze": "haze",
-                            "constant_shift": "dark", "gamma_correction": "dark", "histogram_equalization": "dark",
-                        }
-                        return tool_map.get(tool_name, None)
-                
-                # 遍历所有turn，提取工具名称并映射到退化类型
-                for turn in conv_hist:
-                    response = turn.get('response', '')
-                    if '<tool_call>' in response and '</tool_call>' in response:
-                        try:
-                            tool_match = re.search(r'<tool_call>(.*?)</tool_call>', response, re.DOTALL)
-                            if tool_match:
-                                tools = json.loads(tool_match.group(1).strip())
-                                if isinstance(tools, list):
-                                    for tool_dict in tools:
-                                        if isinstance(tool_dict, dict):
-                                            tool_name = tool_dict.get('name', '')
-                                            deg_type = get_degradation_type_from_tool(tool_name)
+            # 使用统一的提取函数
+            try:
+                from verl.utils.degradation_accuracy_utils import extract_predicted_degradation_types_from_conversation
+                predicted_degradation_types = extract_predicted_degradation_types_from_conversation(conv_hist)
+            except ImportError:
+                # 如果导入失败，使用内联实现（兼容旧版本）
+                if isinstance(conv_hist, list):
+                    # 工具到退化类型的映射
+                    tool_map = {
+                        "swinir_denoising": "noise", "mprnet_denoising": "noise",
+                        "restormer_motion_deblurring": "motion blur", "mprnet_motion_deblurring": "motion blur",
+                        "xrestormer_motion_deblurring": "motion blur", "restormer_defocus_deblurring": "defocus blur",
+                        "drbnet_defocus_deblurring": "defocus blur", "restormer_deraining": "rain",
+                        "mprnet_deraining": "rain", "xrestormer_deraining": "rain",
+                        "swinir_jpeg_artifact_removal": "jpeg compression artifact",
+                        "fbcnn_jpeg_artifact_removal": "jpeg compression artifact",
+                        "swinir_super_resolution": "low resolution", "dehazeformer_dehaze": "haze",
+                        "constant_shift": "dark", "gamma_correction": "dark", "histogram_equalization": "dark",
+                    }
+                    
+                    # 遍历所有turn，提取退化类型
+                    for turn in conv_hist:
+                        response = turn.get('response', '')
+                        if '<tool_call>' in response and '</tool_call>' in response:
+                            try:
+                                tool_match = re.search(r'<tool_call>(.*?)</tool_call>', response, re.DOTALL)
+                                if tool_match:
+                                    tools = json.loads(tool_match.group(1).strip())
+                                    if isinstance(tools, list):
+                                        for tool_dict in tools:
+                                            if isinstance(tool_dict, dict):
+                                                # 优先使用 degradation 字段（新格式）
+                                                if 'degradation' in tool_dict:
+                                                    deg_type = tool_dict['degradation']
+                                                    if deg_type and deg_type not in predicted_degradation_types:
+                                                        predicted_degradation_types.append(deg_type)
+                                                else:
+                                                    # 兼容旧格式：通过工具名称映射
+                                                    tool_name = tool_dict.get('name', '')
+                                                    deg_type = tool_map.get(tool_name, None)
+                                                    if deg_type and deg_type not in predicted_degradation_types:
+                                                        predicted_degradation_types.append(deg_type)
+                                    elif isinstance(tools, dict):
+                                        # 优先使用 degradation 字段
+                                        if 'degradation' in tools:
+                                            deg_type = tools['degradation']
                                             if deg_type and deg_type not in predicted_degradation_types:
                                                 predicted_degradation_types.append(deg_type)
-                                elif isinstance(tools, dict):
-                                    tool_name = tools.get('name', '')
-                                    deg_type = get_degradation_type_from_tool(tool_name)
-                                    if deg_type and deg_type not in predicted_degradation_types:
-                                        predicted_degradation_types.append(deg_type)
-                        except Exception as e:
-                            if idx == 0:
-                                print(f"[DEBUG PRED DEG] Failed to extract tool from turn: {e}")
+                                        else:
+                                            # 兼容旧格式
+                                            tool_name = tools.get('name', '')
+                                            deg_type = tool_map.get(tool_name, None)
+                                            if deg_type and deg_type not in predicted_degradation_types:
+                                                predicted_degradation_types.append(deg_type)
+                            except Exception as e:
+                                if idx == 0:
+                                    print(f"[DEBUG PRED DEG] Failed to extract tool from turn: {e}")
         
         # 格式化预测的退化类型
         if predicted_degradation_types:
@@ -1919,19 +1934,6 @@ def log_validation_wrong_predictions_to_wandb(
     except ImportError:
         print("[WARNING] degradation_accuracy_utils not available")
         return
-    
-    # 工具到退化类型的映射
-    tool_to_degradation = {
-        "swinir_denoising": "noise", "mprnet_denoising": "noise",
-        "restormer_motion_deblurring": "motion blur", "mprnet_motion_deblurring": "motion blur",
-        "xrestormer_motion_deblurring": "motion blur", "restormer_defocus_deblurring": "defocus blur",
-        "drbnet_defocus_deblurring": "defocus blur", "restormer_deraining": "rain",
-        "mprnet_deraining": "rain", "xrestormer_deraining": "rain",
-        "swinir_jpeg_artifact_removal": "jpeg compression artifact",
-        "fbcnn_jpeg_artifact_removal": "jpeg compression artifact",
-        "swinir_super_resolution": "low resolution", "dehazeformer_dehaze": "haze",
-        "constant_shift": "dark", "gamma_correction": "dark", "histogram_equalization": "dark",
-    }
     
     # 获取数据
     image_histories = batch_data.get('image_history', [])

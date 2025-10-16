@@ -1,0 +1,221 @@
+================================================================================
+图像修复工具性能测试报告
+================================================================================
+生成时间: 2025-10-13 11:03:39
+测试样本数: 10
+测试工具数: 14
+总测试次数: 140
+
+================================================================================
+退化图基线指标（所有样本平均）
+================================================================================
+退化图 vs 原图:
+  平均PSNR: 25.00 dB
+  平均SSIM: 0.7320
+  平均LPIPS: 0.2501
+
+说明: 这是工具处理前的图像质量，代表退化的严重程度。
+      PSNR越低、SSIM越低、LPIPS越高，说明退化越严重。
+
+================================================================================
+工具性能汇总（所有样本平均）
+================================================================================
+注: 括号内显示相对于退化图的改进量
+    基线 - 退化图: PSNR=25.00dB, SSIM=0.7320, LPIPS=0.2501
+
+
+工具: fbcnn_jpeg_artifact_removal
+  成功率: 100.0%
+  退化图→修复图:
+    PSNR: 25.00 → 24.19 dB (改进: -0.81)
+    SSIM: 0.7320 → 0.7434 (改进: +0.0114)
+    LPIPS: 0.2501 → 0.2488 (改进: +0.0013)
+
+工具: restormer_deraining
+  成功率: 100.0%
+  退化图→修复图:
+    PSNR: 25.00 → 24.08 dB (改进: -0.92)
+    SSIM: 0.7320 → 0.7092 (改进: -0.0228)
+    LPIPS: 0.2501 → 0.2839 (改进: -0.0338)
+
+工具: restormer_motion_deblurring
+  成功率: 100.0%
+  退化图→修复图:
+    PSNR: 25.00 → 23.63 dB (改进: -1.37)
+    SSIM: 0.7320 → 0.6996 (改进: -0.0324)
+    LPIPS: 0.2501 → 0.2814 (改进: -0.0313)
+
+工具: mprnet_deraining
+  成功率: 100.0%
+  退化图→修复图:
+    PSNR: 25.00 → 23.62 dB (改进: -1.38)
+    SSIM: 0.7320 → 0.7305 (改进: -0.0015)
+    LPIPS: 0.2501 → 0.2651 (改进: -0.0149)
+
+工具: xrestormer_deraining
+  成功率: 100.0%
+  退化图→修复图:
+    PSNR: 25.00 → 23.49 dB (改进: -1.51)
+    SSIM: 0.7320 → 0.7329 (改进: +0.0008)
+    LPIPS: 0.2501 → 0.2586 (改进: -0.0085)
+
+工具: drbnet_defocus_deblurring
+  成功率: 100.0%
+  退化图→修复图:
+    PSNR: 25.00 → 23.21 dB (改进: -1.78)
+    SSIM: 0.7320 → 0.7409 (改进: +0.0089)
+    LPIPS: 0.2501 → 0.2557 (改进: -0.0056)
+
+工具: mprnet_denoising
+  成功率: 100.0%
+  退化图→修复图:
+    PSNR: 25.00 → 23.00 dB (改进: -2.00)
+    SSIM: 0.7320 → 0.7582 (改进: +0.0262)
+    LPIPS: 0.2501 → 0.2940 (改进: -0.0438)
+
+工具: mprnet_motion_deblurring
+  成功率: 100.0%
+  退化图→修复图:
+    PSNR: 25.00 → 22.42 dB (改进: -2.57)
+    SSIM: 0.7320 → 0.6980 (改进: -0.0340)
+    LPIPS: 0.2501 → 0.2703 (改进: -0.0201)
+
+工具: restormer_defocus_deblurring
+  成功率: 100.0%
+  退化图→修复图:
+    PSNR: 25.00 → 22.14 dB (改进: -2.85)
+    SSIM: 0.7320 → 0.7064 (改进: -0.0256)
+    LPIPS: 0.2501 → 0.2614 (改进: -0.0113)
+
+工具: dehazeformer_dehaze
+  成功率: 100.0%
+  退化图→修复图:
+    PSNR: 25.00 → 18.35 dB (改进: -6.65)
+    SSIM: 0.7320 → 0.6492 (改进: -0.0828)
+    LPIPS: 0.2501 → 0.3002 (改进: -0.0501)
+
+工具: xrestormer_motion_deblurring
+  成功率: 100.0%
+  退化图→修复图:
+    PSNR: 25.00 → 16.73 dB (改进: -8.27)
+    SSIM: 0.7320 → 0.5257 (改进: -0.2063)
+    LPIPS: 0.2501 → 0.4364 (改进: -0.1863)
+
+工具: swinir_jpeg_artifact_removal
+  成功率: 20.0%
+  退化图→修复图:
+    PSNR: 25.00 → 5.63 dB (改进: -19.37)
+    SSIM: 0.7320 → 0.1777 (改进: -0.5543)
+    LPIPS: 0.2501 → 0.0334 (改进: +0.2167)
+
+工具: swinir_denoising
+  成功率: 20.0%
+  退化图→修复图:
+    PSNR: 25.00 → 5.60 dB (改进: -19.39)
+    SSIM: 0.7320 → 0.1732 (改进: -0.5589)
+    LPIPS: 0.2501 → 0.0449 (改进: +0.2052)
+
+工具: swinir_super_resolution
+  成功率: 10.0%
+  退化图→修复图:
+    PSNR: 25.00 → 2.12 dB (改进: -22.88)
+    SSIM: 0.7320 → 0.0642 (改进: -0.6678)
+    LPIPS: 0.2501 → 0.0235 (改进: +0.2266)
+
+================================================================================
+按退化类型的工具性能
+================================================================================
+
+退化类型: low resolution
+----------------------------------------
+  restormer_motion_deblurring: -1.46 dB
+  restormer_deraining: -3.01 dB
+  xrestormer_deraining: -5.92 dB
+  fbcnn_jpeg_artifact_removal: -7.08 dB
+  mprnet_deraining: -7.17 dB
+
+退化类型: jpeg compression artifact
+----------------------------------------
+  fbcnn_jpeg_artifact_removal: +1.84 dB
+  restormer_deraining: +0.10 dB
+  xrestormer_deraining: +0.02 dB
+  mprnet_deraining: -0.10 dB
+  mprnet_denoising: -0.44 dB
+
+退化类型: dark
+----------------------------------------
+  restormer_defocus_deblurring: +1.27 dB
+  drbnet_defocus_deblurring: +0.19 dB
+  mprnet_denoising: +0.04 dB
+  restormer_deraining: +0.04 dB
+  fbcnn_jpeg_artifact_removal: -0.00 dB
+
+退化类型: motion blur
+----------------------------------------
+  fbcnn_jpeg_artifact_removal: -0.03 dB
+  xrestormer_deraining: -0.06 dB
+  mprnet_deraining: -0.11 dB
+  mprnet_denoising: -0.12 dB
+  drbnet_defocus_deblurring: -0.16 dB
+
+退化类型: noise
+----------------------------------------
+  mprnet_denoising: +11.77 dB
+  drbnet_defocus_deblurring: +4.26 dB
+  restormer_defocus_deblurring: +2.71 dB
+  fbcnn_jpeg_artifact_removal: +2.45 dB
+  mprnet_deraining: +1.25 dB
+
+退化类型: defocus blur
+----------------------------------------
+  restormer_defocus_deblurring: +2.89 dB
+  restormer_motion_deblurring: +2.69 dB
+  drbnet_defocus_deblurring: +2.66 dB
+  mprnet_motion_deblurring: +2.32 dB
+  mprnet_deraining: +0.00 dB
+
+================================================================================
+推荐工具（按PSNR改进排序）
+================================================================================
+参考基线（退化图）: PSNR=25.00dB, SSIM=0.7320, LPIPS=0.2501
+
+1. fbcnn_jpeg_artifact_removal
+   退化图 → 修复图: PSNR 25.00 → 24.19 dB
+   改进量: PSNR -0.81 dB, SSIM +0.0114, LPIPS +0.0013
+
+2. restormer_deraining
+   退化图 → 修复图: PSNR 25.00 → 24.08 dB
+   改进量: PSNR -0.92 dB, SSIM -0.0228, LPIPS -0.0338
+
+3. restormer_motion_deblurring
+   退化图 → 修复图: PSNR 25.00 → 23.63 dB
+   改进量: PSNR -1.37 dB, SSIM -0.0324, LPIPS -0.0313
+
+4. mprnet_deraining
+   退化图 → 修复图: PSNR 25.00 → 23.62 dB
+   改进量: PSNR -1.38 dB, SSIM -0.0015, LPIPS -0.0149
+
+5. xrestormer_deraining
+   退化图 → 修复图: PSNR 25.00 → 23.49 dB
+   改进量: PSNR -1.51 dB, SSIM +0.0008, LPIPS -0.0085
+
+6. drbnet_defocus_deblurring
+   退化图 → 修复图: PSNR 25.00 → 23.21 dB
+   改进量: PSNR -1.78 dB, SSIM +0.0089, LPIPS -0.0056
+
+7. mprnet_denoising
+   退化图 → 修复图: PSNR 25.00 → 23.00 dB
+   改进量: PSNR -2.00 dB, SSIM +0.0262, LPIPS -0.0438
+
+8. mprnet_motion_deblurring
+   退化图 → 修复图: PSNR 25.00 → 22.42 dB
+   改进量: PSNR -2.57 dB, SSIM -0.0340, LPIPS -0.0201
+
+9. restormer_defocus_deblurring
+   退化图 → 修复图: PSNR 25.00 → 22.14 dB
+   改进量: PSNR -2.85 dB, SSIM -0.0256, LPIPS -0.0113
+
+10. dehazeformer_dehaze
+   退化图 → 修复图: PSNR 25.00 → 18.35 dB
+   改进量: PSNR -6.65 dB, SSIM -0.0828, LPIPS -0.0501
+

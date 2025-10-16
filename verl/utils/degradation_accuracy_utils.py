@@ -26,13 +26,20 @@ def extract_predicted_degradation_types_from_conversation(conversation_history: 
     """
     从conversation_history中提取预测的退化类型
     
+    新格式支持直接从 tool_call 的 "degradation" 字段提取：
+    <tool_call>
+    [
+        {"name":"fbcnn_jpeg_artifact_removal", "degradation":"jpeg compression artifact", "arguments":{...}}
+    ]
+    </tool_call>
+    
     Args:
         conversation_history: 对话历史列表
         
     Returns:
         预测的退化类型列表（去重）
     """
-    # 工具到退化类型的映射（与tracking_image_utils.py中保持一致）
+    # 工具到退化类型的映射（兼容旧格式，如果没有degradation字段则使用映射）
     tool_to_degradation = {
         "swinir_denoising": "noise", "mprnet_denoising": "noise",
         "restormer_motion_deblurring": "motion blur", "mprnet_motion_deblurring": "motion blur",
@@ -63,15 +70,29 @@ def extract_predicted_degradation_types_from_conversation(conversation_history: 
                     if isinstance(tools, list):
                         for tool_dict in tools:
                             if isinstance(tool_dict, dict):
-                                tool_name = tool_dict.get('name', '')
-                                deg_type = tool_to_degradation.get(tool_name, None)
-                                if deg_type and deg_type not in predicted_types:
-                                    predicted_types.append(deg_type)
+                                # 优先使用 degradation 字段（新格式）
+                                if 'degradation' in tool_dict:
+                                    deg_type = tool_dict['degradation']
+                                    if deg_type and deg_type not in predicted_types:
+                                        predicted_types.append(deg_type)
+                                else:
+                                    # 兼容旧格式：通过工具名称映射
+                                    tool_name = tool_dict.get('name', '')
+                                    deg_type = tool_to_degradation.get(tool_name, None)
+                                    if deg_type and deg_type not in predicted_types:
+                                        predicted_types.append(deg_type)
                     elif isinstance(tools, dict):
-                        tool_name = tools.get('name', '')
-                        deg_type = tool_to_degradation.get(tool_name, None)
-                        if deg_type and deg_type not in predicted_types:
-                            predicted_types.append(deg_type)
+                        # 优先使用 degradation 字段
+                        if 'degradation' in tools:
+                            deg_type = tools['degradation']
+                            if deg_type and deg_type not in predicted_types:
+                                predicted_types.append(deg_type)
+                        else:
+                            # 兼容旧格式
+                            tool_name = tools.get('name', '')
+                            deg_type = tool_to_degradation.get(tool_name, None)
+                            if deg_type and deg_type not in predicted_types:
+                                predicted_types.append(deg_type)
             except:
                 pass
     

@@ -1,0 +1,19 @@
+SCUNet 去噪效果测试结果
+============================================================
+
+工具: scunet_real_denoising_gan
+噪声图像: /app/xiaominl/datasets/degraded_datasets/degraded_dataset/noise/low/000001_level1.png
+原始图像: /app/xiaominl/datasets/degraded_datasets/degraded_dataset/original/000001.png
+执行时间: 2.18s
+
+去噪前指标 (噪声图像 vs 原始图像):
+  PSNR: 38.9158 dB
+  SSIM: 0.9855
+
+去噪后指标 (去噪图像 vs 原始图像):
+  PSNR: 31.8115 dB
+  SSIM: 0.9715
+
+改进情况:
+  PSNR: ↓ 7.1043 dB (-7.10%)
+  SSIM: ↓ 0.0140 (-1.40%)

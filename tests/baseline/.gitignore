@@ -1,0 +1,21 @@
+# 忽略测试结果目录
+results/
+*.pyc
+__pycache__/
+.pytest_cache/
+
+# 忽略临时文件
+*.tmp
+*.log
+*.swp
+*~
+
+# 忽略生成的图像
+*.png
+*.jpg
+*.jpeg
+
+# 忽略checkpoint
+checkpoints/
+
+

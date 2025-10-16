@@ -1,0 +1,1468 @@
+================================================================================
+统计分析报告
+================================================================================
+
+================================================================================
+1. 按工具分析（对所有退化类型的表现）
+================================================================================
+
+工具: dehazeformer_dehaze
+  成功率: 100.0%
+  PSNR改进: 平均-17.56dB, 标准差27.33, 范围[-93.28, +0.72]
+  SSIM改进: 平均-0.1084, 中位数-0.0650
+  LPIPS改进: 平均-0.0517, 中位数-0.0231
+
+工具: drbnet_defocus_deblurring
+  成功率: 100.0%
+  PSNR改进: 平均-9.49dB, 标准差20.97, 范围[-68.73, +5.27]
+  SSIM改进: 平均+0.0033, 中位数-0.0095
+  LPIPS改进: 平均+0.0049, 中位数-0.0072
+
+工具: fbcnn_jpeg_artifact_removal
+  成功率: 100.0%
+  PSNR改进: 平均-7.72dB, 标准差19.12, 范围[-61.52, +5.95]
+  SSIM改进: 平均+0.0068, 中位数-0.0054
+  LPIPS改进: 平均-0.0039, 中位数-0.0043
+
+工具: mprnet_denoising
+  成功率: 100.0%
+  PSNR改进: 平均-9.91dB, 标准差21.55, 范围[-71.87, +12.78]
+  SSIM改进: 平均-0.0135, 中位数-0.0238
+  LPIPS改进: 平均-0.0638, 中位数-0.0570
+
+工具: mprnet_deraining
+  成功率: 100.0%
+  PSNR改进: 平均-8.78dB, 标准差20.71, 范围[-67.39, +14.48]
+  SSIM改进: 平均+0.0033, 中位数-0.0106
+  LPIPS改进: 平均-0.0080, 中位数-0.0179
+
+工具: mprnet_motion_deblurring
+  成功率: 100.0%
+  PSNR改进: 平均-10.83dB, 标准差19.76, 范围[-72.58, +7.57]
+  SSIM改进: 平均-0.0740, 中位数-0.0091
+  LPIPS改进: 平均-0.0434, 中位数-0.0038
+
+工具: restormer_defocus_deblurring
+  成功率: 100.0%
+  PSNR改进: 平均-12.04dB, 标准差23.31, 范围[-75.77, +4.22]
+  SSIM改进: 平均-0.0214, 中位数-0.0174
+  LPIPS改进: 平均-0.0069, 中位数-0.0106
+
+工具: restormer_deraining
+  成功率: 100.0%
+  PSNR改进: 平均-7.03dB, 标准差18.29, 范围[-63.23, +18.41]
+  SSIM改进: 平均+0.0124, 中位数-0.0029
+  LPIPS改进: 平均+0.0039, 中位数-0.0063
+
+工具: restormer_motion_deblurring
+  成功率: 100.0%
+  PSNR改进: 平均-8.34dB, 标准差18.36, 范围[-66.97, +7.22]
+  SSIM改进: 平均-0.0130, 中位数-0.0029
+  LPIPS改进: 平均+0.0055, 中位数-0.0005
+
+工具: swinir_denoising
+  成功率: 100.0%
+  PSNR改进: 平均-9.95dB, 标准差22.34, 范围[-70.73, +10.79]
+  SSIM改进: 平均-0.0409, 中位数-0.0544
+  LPIPS改进: 平均-0.0988, 中位数-0.0996
+
+工具: swinir_jpeg_artifact_removal
+  成功率: 100.0%
+  PSNR改进: 平均-10.12dB, 标准差21.80, 范围[-70.93, +4.52]
+  SSIM改进: 平均-0.0329, 中位数-0.0387
+  LPIPS改进: 平均-0.0427, 中位数-0.0520
+
+工具: swinir_super_resolution
+  成功率: 100.0%
+  PSNR改进: 平均-12.11dB, 标准差22.84, 范围[-78.15, +6.76]
+  SSIM改进: 平均-0.0599, 中位数-0.0652
+  LPIPS改进: 平均-0.1095, 中位数-0.1137
+
+工具: xrestormer_deraining
+  成功率: 100.0%
+  PSNR改进: 平均-10.69dB, 标准差22.73, 范围[-75.76, +18.96]
+  SSIM改进: 平均-0.0011, 中位数-0.0072
+  LPIPS改进: 平均+0.0036, 中位数-0.0079
+
+工具: xrestormer_motion_deblurring
+  成功率: 100.0%
+  PSNR改进: 平均-17.24dB, 标准差24.63, 范围[-82.86, +3.24]
+  SSIM改进: 平均-0.2288, 中位数-0.2261
+  LPIPS改进: 平均-0.1908, 中位数-0.2001
+
+================================================================================
+2. 按样本分析（每个样本的最佳工具）
+================================================================================
+
+样本: sample_9
+  退化类型: low resolution
+  退化图基线: PSNR=41.65dB, SSIM=0.9954, LPIPS=0.0052
+  最佳工具: restormer_deraining (PSNR改进 -6.23dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -24.67dB)
+
+样本: sample_12
+  退化类型: low resolution
+  退化图基线: PSNR=44.26dB, SSIM=0.9947, LPIPS=0.0047
+  最佳工具: restormer_motion_deblurring (PSNR改进 -0.47dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -25.55dB)
+
+样本: sample_6
+  退化类型: low resolution
+  退化图基线: PSNR=38.70dB, SSIM=0.9962, LPIPS=0.0075
+  最佳工具: restormer_motion_deblurring (PSNR改进 -0.59dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -32.13dB)
+
+样本: sample_2
+  退化类型: dark
+  退化图基线: PSNR=21.89dB, SSIM=0.9903, LPIPS=0.0167
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +2.33dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -5.54dB)
+
+样本: sample_15
+  退化类型: defocus blur
+  退化图基线: PSNR=45.08dB, SSIM=0.9870, LPIPS=0.0650
+  最佳工具: xrestormer_motion_deblurring (PSNR改进 +2.29dB)
+  最差工具: xrestormer_deraining (PSNR改进 -28.29dB)
+
+样本: sample_10
+  退化类型: dark
+  退化图基线: PSNR=13.76dB, SSIM=0.5327, LPIPS=0.2881
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +0.40dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -0.73dB)
+
+样本: sample_4
+  退化类型: rain
+  退化图基线: PSNR=19.79dB, SSIM=0.6406, LPIPS=0.4425
+  最佳工具: restormer_deraining (PSNR改进 +14.86dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -5.05dB)
+
+样本: sample_11
+  退化类型: dark
+  退化图基线: PSNR=9.66dB, SSIM=0.6678, LPIPS=0.1914
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +0.19dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -3.63dB)
+
+样本: sample_5
+  退化类型: dark
+  退化图基线: PSNR=31.70dB, SSIM=0.9937, LPIPS=0.0036
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +2.68dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -10.97dB)
+
+样本: sample_7
+  退化类型: defocus blur
+  退化图基线: PSNR=24.76dB, SSIM=0.8742, LPIPS=0.3161
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +0.79dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -6.12dB)
+
+样本: sample_8
+  退化类型: dark
+  退化图基线: PSNR=22.16dB, SSIM=0.9598, LPIPS=0.0255
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +3.47dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -5.48dB)
+
+样本: sample_14
+  退化类型: motion blur
+  退化图基线: PSNR=26.02dB, SSIM=0.7891, LPIPS=0.2502
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +1.09dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -2.00dB)
+
+样本: sample_13
+  退化类型: motion blur
+  退化图基线: PSNR=26.21dB, SSIM=0.7989, LPIPS=0.1854
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +0.77dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -6.25dB)
+
+样本: sample_3
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=29.20dB, SSIM=0.8402, LPIPS=0.1308
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +2.94dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -10.87dB)
+
+样本: sample_0
+  退化类型: motion blur
+  退化图基线: PSNR=23.34dB, SSIM=0.7139, LPIPS=0.3880
+  最佳工具: mprnet_motion_deblurring (PSNR改进 +0.68dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -5.45dB)
+
+样本: sample_1
+  退化类型: dark
+  退化图基线: PSNR=14.86dB, SSIM=0.6418, LPIPS=0.1247
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +0.43dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -1.03dB)
+
+样本: sample_22
+  退化类型: low resolution
+  退化图基线: PSNR=63.04dB, SSIM=0.9999, LPIPS=0.0000
+  最佳工具: mprnet_deraining (PSNR改进 -9.35dB)
+  最差工具: xrestormer_deraining (PSNR改进 -43.31dB)
+
+样本: sample_26
+  退化类型: low resolution
+  退化图基线: PSNR=58.08dB, SSIM=0.9984, LPIPS=0.0002
+  最佳工具: restormer_deraining (PSNR改进 -4.46dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -37.06dB)
+
+样本: sample_17
+  退化类型: defocus blur
+  退化图基线: PSNR=25.18dB, SSIM=0.8396, LPIPS=0.2209
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +0.98dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -7.01dB)
+
+样本: sample_29
+  退化类型: low resolution
+  退化图基线: PSNR=49.31dB, SSIM=0.9982, LPIPS=0.0011
+  最佳工具: restormer_deraining (PSNR改进 -5.69dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -28.98dB)
+
+样本: sample_19
+  退化类型: motion blur
+  退化图基线: PSNR=18.24dB, SSIM=0.4924, LPIPS=0.4430
+  最佳工具: restormer_motion_deblurring (PSNR改进 +0.82dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -2.08dB)
+
+样本: sample_28
+  退化类型: low resolution
+  退化图基线: PSNR=50.64dB, SSIM=0.9976, LPIPS=0.0034
+  最佳工具: restormer_deraining (PSNR改进 -3.59dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -34.40dB)
+
+样本: sample_30
+  退化类型: low resolution
+  退化图基线: PSNR=45.21dB, SSIM=0.9973, LPIPS=0.0038
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 -4.37dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -29.65dB)
+
+样本: sample_21
+  退化类型: rain
+  退化图基线: PSNR=18.66dB, SSIM=0.5353, LPIPS=0.4952
+  最佳工具: restormer_deraining (PSNR改进 +17.54dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -5.51dB)
+
+样本: sample_20
+  退化类型: rain
+  退化图基线: PSNR=20.71dB, SSIM=0.8130, LPIPS=0.3394
+  最佳工具: restormer_deraining (PSNR改进 +9.91dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -8.21dB)
+
+样本: sample_16
+  退化类型: noise
+  退化图基线: PSNR=18.74dB, SSIM=0.3539, LPIPS=0.5043
+  最佳工具: swinir_denoising (PSNR改进 +9.56dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -15.21dB)
+
+样本: sample_23
+  退化类型: motion blur
+  退化图基线: PSNR=29.78dB, SSIM=0.9505, LPIPS=0.1039
+  最佳工具: mprnet_motion_deblurring (PSNR改进 +1.29dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -8.73dB)
+
+样本: sample_25
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=31.18dB, SSIM=0.9051, LPIPS=0.0577
+  最佳工具: swinir_jpeg_artifact_removal (PSNR改进 +3.39dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -10.02dB)
+
+样本: sample_31
+  退化类型: noise
+  退化图基线: PSNR=18.93dB, SSIM=0.6328, LPIPS=0.2351
+  最佳工具: swinir_denoising (PSNR改进 +9.05dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -13.60dB)
+
+样本: sample_33
+  退化类型: low resolution
+  退化图基线: PSNR=37.75dB, SSIM=0.9957, LPIPS=0.0063
+  最佳工具: restormer_motion_deblurring (PSNR改进 -1.83dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -33.23dB)
+
+样本: sample_27
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_motion_deblurring (PSNR改进 -44.86dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -86.63dB)
+
+样本: sample_18
+  退化类型: noise
+  退化图基线: PSNR=22.75dB, SSIM=0.2933, LPIPS=0.4930
+  最佳工具: swinir_denoising (PSNR改进 +10.79dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -9.61dB)
+
+样本: sample_24
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 -54.75dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -93.28dB)
+
+样本: sample_39
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_motion_deblurring (PSNR改进 -52.77dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -82.26dB)
+
+样本: sample_36
+  退化类型: defocus blur
+  退化图基线: PSNR=36.75dB, SSIM=0.9559, LPIPS=0.1557
+  最佳工具: xrestormer_motion_deblurring (PSNR改进 +3.24dB)
+  最差工具: xrestormer_deraining (PSNR改进 -17.41dB)
+
+样本: sample_37
+  退化类型: rain
+  退化图基线: PSNR=18.32dB, SSIM=0.7516, LPIPS=0.3675
+  最佳工具: restormer_deraining (PSNR改进 +10.50dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -11.88dB)
+
+样本: sample_41
+  退化类型: noise
+  退化图基线: PSNR=28.16dB, SSIM=0.6951, LPIPS=0.1474
+  最佳工具: swinir_denoising (PSNR改进 +5.32dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -13.27dB)
+
+样本: sample_42
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=32.64dB, SSIM=0.9061, LPIPS=0.1459
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +2.78dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -11.62dB)
+
+样本: sample_48
+  退化类型: dark
+  退化图基线: PSNR=17.85dB, SSIM=0.8798, LPIPS=0.0463
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +1.47dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -3.83dB)
+
+样本: sample_44
+  退化类型: dark
+  退化图基线: PSNR=17.36dB, SSIM=0.6751, LPIPS=0.1348
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +0.76dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -2.37dB)
+
+样本: sample_43
+  退化类型: defocus blur
+  退化图基线: PSNR=26.86dB, SSIM=0.8428, LPIPS=0.3206
+  最佳工具: restormer_motion_deblurring (PSNR改进 +2.48dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -2.48dB)
+
+样本: sample_34
+  退化类型: rain
+  退化图基线: PSNR=26.10dB, SSIM=0.9412, LPIPS=0.1420
+  最佳工具: mprnet_deraining (PSNR改进 +0.34dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -10.69dB)
+
+样本: sample_38
+  退化类型: noise
+  退化图基线: PSNR=23.29dB, SSIM=0.6083, LPIPS=0.1964
+  最佳工具: swinir_denoising (PSNR改进 +6.58dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -17.27dB)
+
+样本: sample_32
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_motion_deblurring (PSNR改进 -49.63dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -82.75dB)
+
+样本: sample_50
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=33.80dB, SSIM=0.8959, LPIPS=0.0745
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +1.75dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -9.85dB)
+
+样本: sample_55
+  退化类型: low resolution
+  退化图基线: PSNR=37.40dB, SSIM=0.9950, LPIPS=0.0121
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 -4.72dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -24.54dB)
+
+样本: sample_52
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_deraining (PSNR改进 -51.56dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -85.33dB)
+
+样本: sample_35
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_motion_deblurring (PSNR改进 -37.80dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -84.49dB)
+
+样本: sample_54
+  退化类型: dark
+  退化图基线: PSNR=11.90dB, SSIM=0.5999, LPIPS=0.2137
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +1.02dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -1.07dB)
+
+样本: sample_46
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=24.44dB, SSIM=0.7791, LPIPS=0.1736
+  最佳工具: swinir_jpeg_artifact_removal (PSNR改进 +1.30dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -9.87dB)
+
+样本: sample_40
+  退化类型: dark
+  退化图基线: PSNR=19.36dB, SSIM=0.8819, LPIPS=0.0357
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +2.10dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -4.69dB)
+
+样本: sample_47
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=26.51dB, SSIM=0.8484, LPIPS=0.0745
+  最佳工具: swinir_jpeg_artifact_removal (PSNR改进 +2.60dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -9.10dB)
+
+样本: sample_45
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_deraining (PSNR改进 -55.97dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -86.31dB)
+
+样本: sample_53
+  退化类型: defocus blur
+  退化图基线: PSNR=21.16dB, SSIM=0.7802, LPIPS=0.3836
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +1.67dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -5.19dB)
+
+样本: sample_56
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_deraining (PSNR改进 -52.14dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -86.54dB)
+
+样本: sample_49
+  退化类型: motion blur
+  退化图基线: PSNR=23.67dB, SSIM=0.7050, LPIPS=0.2111
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +0.36dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -7.03dB)
+
+样本: sample_61
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=25.90dB, SSIM=0.8827, LPIPS=0.0802
+  最佳工具: swinir_jpeg_artifact_removal (PSNR改进 +1.38dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -11.04dB)
+
+样本: sample_59
+  退化类型: low resolution
+  退化图基线: PSNR=43.49dB, SSIM=0.9985, LPIPS=0.0029
+  最佳工具: restormer_deraining (PSNR改进 -6.86dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -27.12dB)
+
+样本: sample_58
+  退化类型: dark
+  退化图基线: PSNR=16.54dB, SSIM=0.9286, LPIPS=0.0216
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +1.13dB)
+  最差工具: restormer_deraining (PSNR改进 -3.93dB)
+
+样本: sample_66
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_deraining (PSNR改进 -47.14dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -82.86dB)
+
+样本: sample_68
+  退化类型: low resolution
+  退化图基线: PSNR=38.92dB, SSIM=0.9962, LPIPS=0.0067
+  最佳工具: restormer_motion_deblurring (PSNR改进 +1.33dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -25.68dB)
+
+样本: sample_62
+  退化类型: defocus blur
+  退化图基线: PSNR=27.88dB, SSIM=0.7815, LPIPS=0.3898
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +3.83dB)
+  最差工具: xrestormer_deraining (PSNR改进 -10.13dB)
+
+样本: sample_51
+  退化类型: dark
+  退化图基线: PSNR=20.97dB, SSIM=0.7304, LPIPS=0.0591
+  最佳工具: restormer_deraining (PSNR改进 +1.65dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -5.86dB)
+
+样本: sample_69
+  退化类型: defocus blur
+  退化图基线: PSNR=31.00dB, SSIM=0.9118, LPIPS=0.1851
+  最佳工具: restormer_motion_deblurring (PSNR改进 +3.05dB)
+  最差工具: xrestormer_deraining (PSNR改进 -12.13dB)
+
+样本: sample_57
+  退化类型: motion blur
+  退化图基线: PSNR=30.86dB, SSIM=0.9321, LPIPS=0.0933
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +0.57dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -4.95dB)
+
+样本: sample_70
+  退化类型: rain
+  退化图基线: PSNR=29.27dB, SSIM=0.9757, LPIPS=0.0643
+  最佳工具: restormer_deraining (PSNR改进 -0.13dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -13.89dB)
+
+样本: sample_60
+  退化类型: motion blur
+  退化图基线: PSNR=23.64dB, SSIM=0.4928, LPIPS=0.4235
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 -0.05dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -2.78dB)
+
+样本: sample_67
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_deraining (PSNR改进 -50.99dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -82.65dB)
+
+样本: sample_76
+  退化类型: noise
+  退化图基线: PSNR=30.70dB, SSIM=0.7744, LPIPS=0.1128
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +2.35dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -13.59dB)
+
+样本: sample_63
+  退化类型: motion blur
+  退化图基线: PSNR=20.22dB, SSIM=0.4954, LPIPS=0.3536
+  最佳工具: mprnet_motion_deblurring (PSNR改进 +1.42dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -3.68dB)
+
+样本: sample_71
+  退化类型: low resolution
+  退化图基线: PSNR=51.64dB, SSIM=0.9977, LPIPS=0.0010
+  最佳工具: restormer_motion_deblurring (PSNR改进 +0.36dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -35.04dB)
+
+样本: sample_72
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=32.41dB, SSIM=0.9064, LPIPS=0.1249
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +2.79dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -9.67dB)
+
+样本: sample_64
+  退化类型: motion blur
+  退化图基线: PSNR=27.53dB, SSIM=0.8901, LPIPS=0.0960
+  最佳工具: restormer_deraining (PSNR改进 -0.01dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -4.29dB)
+
+样本: sample_77
+  退化类型: low resolution
+  退化图基线: PSNR=40.69dB, SSIM=0.9964, LPIPS=0.0055
+  最佳工具: restormer_motion_deblurring (PSNR改进 -6.80dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -25.71dB)
+
+样本: sample_65
+  退化类型: dark
+  退化图基线: PSNR=12.56dB, SSIM=0.5250, LPIPS=0.1705
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +0.24dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -3.08dB)
+
+样本: sample_75
+  退化类型: dark
+  退化图基线: PSNR=16.79dB, SSIM=0.7849, LPIPS=0.0707
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +0.38dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -1.92dB)
+
+样本: sample_78
+  退化类型: defocus blur
+  退化图基线: PSNR=29.38dB, SSIM=0.7985, LPIPS=0.3164
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +1.80dB)
+  最差工具: xrestormer_deraining (PSNR改进 -10.56dB)
+
+样本: sample_73
+  退化类型: noise
+  退化图基线: PSNR=15.12dB, SSIM=0.2535, LPIPS=0.7010
+  最佳工具: mprnet_denoising (PSNR改进 +6.08dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -10.13dB)
+
+样本: sample_79
+  退化类型: noise
+  退化图基线: PSNR=29.39dB, SSIM=0.6398, LPIPS=0.2298
+  最佳工具: swinir_denoising (PSNR改进 +8.07dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -13.58dB)
+
+样本: sample_82
+  退化类型: noise
+  退化图基线: PSNR=34.34dB, SSIM=0.8710, LPIPS=0.1196
+  最佳工具: swinir_jpeg_artifact_removal (PSNR改进 +4.52dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -20.13dB)
+
+样本: sample_84
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=28.99dB, SSIM=0.8383, LPIPS=0.1301
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +0.81dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -8.07dB)
+
+样本: sample_80
+  退化类型: motion blur
+  退化图基线: PSNR=25.30dB, SSIM=0.6228, LPIPS=0.3528
+  最佳工具: xrestormer_deraining (PSNR改进 -0.06dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -7.66dB)
+
+样本: sample_92
+  退化类型: rain
+  退化图基线: PSNR=28.48dB, SSIM=0.9786, LPIPS=0.1016
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 -0.09dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -9.76dB)
+
+样本: sample_74
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_motion_deblurring (PSNR改进 -48.64dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -87.88dB)
+
+样本: sample_87
+  退化类型: noise
+  退化图基线: PSNR=18.25dB, SSIM=0.3765, LPIPS=0.5004
+  最佳工具: mprnet_denoising (PSNR改进 +8.73dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -13.00dB)
+
+样本: sample_91
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_deraining (PSNR改进 -50.95dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -86.03dB)
+
+样本: sample_83
+  退化类型: motion blur
+  退化图基线: PSNR=22.98dB, SSIM=0.6708, LPIPS=0.3294
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 -0.02dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -5.51dB)
+
+样本: sample_81
+  退化类型: dark
+  退化图基线: PSNR=14.48dB, SSIM=0.8498, LPIPS=0.0951
+  最佳工具: mprnet_deraining (PSNR改进 +1.77dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -9.15dB)
+
+样本: sample_88
+  退化类型: rain
+  退化图基线: PSNR=20.58dB, SSIM=0.6960, LPIPS=0.3077
+  最佳工具: restormer_deraining (PSNR改进 +12.46dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -6.42dB)
+
+样本: sample_86
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=23.22dB, SSIM=0.8194, LPIPS=0.1073
+  最佳工具: swinir_jpeg_artifact_removal (PSNR改进 +0.95dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -9.04dB)
+
+样本: sample_94
+  退化类型: dark
+  退化图基线: PSNR=15.67dB, SSIM=0.9375, LPIPS=0.0635
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +0.87dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -2.95dB)
+
+样本: sample_93
+  退化类型: defocus blur
+  退化图基线: PSNR=26.65dB, SSIM=0.9075, LPIPS=0.1904
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +1.18dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -5.99dB)
+
+样本: sample_97
+  退化类型: dark
+  退化图基线: PSNR=21.33dB, SSIM=0.7775, LPIPS=0.0570
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +1.16dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -2.16dB)
+
+样本: sample_95
+  退化类型: dark
+  退化图基线: PSNR=12.00dB, SSIM=0.6287, LPIPS=0.1146
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +1.20dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -2.19dB)
+
+样本: sample_90
+  退化类型: dark
+  退化图基线: PSNR=12.50dB, SSIM=0.7557, LPIPS=0.1096
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +1.06dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -1.81dB)
+
+样本: sample_89
+  退化类型: defocus blur
+  退化图基线: PSNR=35.80dB, SSIM=0.9296, LPIPS=0.2217
+  最佳工具: xrestormer_motion_deblurring (PSNR改进 +2.50dB)
+  最差工具: xrestormer_deraining (PSNR改进 -18.08dB)
+
+样本: sample_85
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=34.49dB, SSIM=0.9336, LPIPS=0.0994
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +2.29dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -13.53dB)
+
+样本: sample_105
+  退化类型: rain
+  退化图基线: PSNR=28.25dB, SSIM=0.9612, LPIPS=0.1427
+  最佳工具: restormer_deraining (PSNR改进 -0.09dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -13.53dB)
+
+样本: sample_96
+  退化类型: rain
+  退化图基线: PSNR=22.42dB, SSIM=0.7005, LPIPS=0.4558
+  最佳工具: restormer_deraining (PSNR改进 +14.94dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -6.37dB)
+
+样本: sample_102
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=24.36dB, SSIM=0.7622, LPIPS=0.2001
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +2.47dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -8.16dB)
+
+样本: sample_101
+  退化类型: motion blur
+  退化图基线: PSNR=18.86dB, SSIM=0.4373, LPIPS=0.3160
+  最佳工具: restormer_motion_deblurring (PSNR改进 +0.14dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -2.53dB)
+
+样本: sample_99
+  退化类型: dark
+  退化图基线: PSNR=18.32dB, SSIM=0.9276, LPIPS=0.0196
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +0.28dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -4.61dB)
+
+样本: sample_116
+  退化类型: low resolution
+  退化图基线: PSNR=58.13dB, SSIM=0.9984, LPIPS=0.0002
+  最佳工具: mprnet_motion_deblurring (PSNR改进 -3.45dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -52.48dB)
+
+样本: sample_110
+  退化类型: dark
+  退化图基线: PSNR=20.07dB, SSIM=0.8877, LPIPS=0.0510
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +0.55dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -5.75dB)
+
+样本: sample_98
+  退化类型: noise
+  退化图基线: PSNR=19.95dB, SSIM=0.5758, LPIPS=0.3325
+  最佳工具: swinir_denoising (PSNR改进 +7.61dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -15.83dB)
+
+样本: sample_100
+  退化类型: motion blur
+  退化图基线: PSNR=30.18dB, SSIM=0.8501, LPIPS=0.2645
+  最佳工具: restormer_deraining (PSNR改进 -0.08dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -12.53dB)
+
+样本: sample_103
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 -48.33dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -89.91dB)
+
+样本: sample_114
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=32.26dB, SSIM=0.9467, LPIPS=0.0600
+  最佳工具: swinir_jpeg_artifact_removal (PSNR改进 +4.26dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -10.47dB)
+
+样本: sample_106
+  退化类型: noise
+  退化图基线: PSNR=17.13dB, SSIM=0.1136, LPIPS=0.9508
+  最佳工具: mprnet_denoising (PSNR改进 +12.78dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -10.48dB)
+
+样本: sample_104
+  退化类型: motion blur
+  退化图基线: PSNR=23.40dB, SSIM=0.7665, LPIPS=0.2274
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 -0.03dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -5.55dB)
+
+样本: sample_117
+  退化类型: defocus blur
+  退化图基线: PSNR=30.07dB, SSIM=0.7264, LPIPS=0.5297
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +2.66dB)
+  最差工具: xrestormer_deraining (PSNR改进 -13.54dB)
+
+样本: sample_111
+  退化类型: dark
+  退化图基线: PSNR=16.01dB, SSIM=0.7087, LPIPS=0.1366
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +0.90dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -2.11dB)
+
+样本: sample_121
+  退化类型: noise
+  退化图基线: PSNR=27.55dB, SSIM=0.5691, LPIPS=0.3021
+  最佳工具: swinir_super_resolution (PSNR改进 +5.82dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -9.27dB)
+
+样本: sample_113
+  退化类型: low resolution
+  退化图基线: PSNR=37.41dB, SSIM=0.9956, LPIPS=0.0026
+  最佳工具: restormer_deraining (PSNR改进 -2.59dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -21.99dB)
+
+样本: sample_115
+  退化类型: defocus blur
+  退化图基线: PSNR=21.65dB, SSIM=0.6405, LPIPS=0.5192
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +4.22dB)
+  最差工具: swinir_super_resolution (PSNR改进 -2.02dB)
+
+样本: sample_107
+  退化类型: rain
+  退化图基线: PSNR=18.19dB, SSIM=0.5186, LPIPS=0.5707
+  最佳工具: xrestormer_deraining (PSNR改进 +17.16dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -5.96dB)
+
+样本: sample_109
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_deraining (PSNR改进 -51.57dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -82.11dB)
+
+样本: sample_119
+  退化类型: defocus blur
+  退化图基线: PSNR=24.07dB, SSIM=0.7036, LPIPS=0.4307
+  最佳工具: xrestormer_motion_deblurring (PSNR改进 +2.29dB)
+  最差工具: xrestormer_deraining (PSNR改进 -4.35dB)
+
+样本: sample_108
+  退化类型: dark
+  退化图基线: PSNR=19.42dB, SSIM=0.9845, LPIPS=0.0238
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +3.07dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -3.85dB)
+
+样本: sample_120
+  退化类型: motion blur
+  退化图基线: PSNR=26.97dB, SSIM=0.8098, LPIPS=0.2426
+  最佳工具: restormer_deraining (PSNR改进 -0.02dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -9.84dB)
+
+样本: sample_112
+  退化类型: dark
+  退化图基线: PSNR=15.73dB, SSIM=0.7175, LPIPS=0.0562
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +0.30dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -3.24dB)
+
+样本: sample_126
+  退化类型: dark
+  退化图基线: PSNR=14.29dB, SSIM=0.8129, LPIPS=0.1131
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +0.37dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -3.26dB)
+
+样本: sample_118
+  退化类型: defocus blur
+  退化图基线: PSNR=35.18dB, SSIM=0.9037, LPIPS=0.3311
+  最佳工具: restormer_motion_deblurring (PSNR改进 +1.24dB)
+  最差工具: xrestormer_deraining (PSNR改进 -12.46dB)
+
+样本: sample_136
+  退化类型: low resolution
+  退化图基线: PSNR=48.90dB, SSIM=0.9983, LPIPS=0.0018
+  最佳工具: mprnet_motion_deblurring (PSNR改进 -2.35dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -26.54dB)
+
+样本: sample_122
+  退化类型: motion blur
+  退化图基线: PSNR=15.65dB, SSIM=0.3550, LPIPS=0.4923
+  最佳工具: mprnet_denoising (PSNR改进 +0.00dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -1.51dB)
+
+样本: sample_134
+  退化类型: noise
+  退化图基线: PSNR=18.37dB, SSIM=0.1274, LPIPS=0.7304
+  最佳工具: swinir_denoising (PSNR改进 +7.04dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -10.22dB)
+
+样本: sample_130
+  退化类型: low resolution
+  退化图基线: PSNR=44.10dB, SSIM=0.9970, LPIPS=0.0056
+  最佳工具: restormer_motion_deblurring (PSNR改进 +0.74dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -27.05dB)
+
+样本: sample_128
+  退化类型: defocus blur
+  退化图基线: PSNR=33.44dB, SSIM=0.9498, LPIPS=0.1186
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +0.02dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -13.21dB)
+
+样本: sample_125
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_motion_deblurring (PSNR改进 -50.10dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -82.32dB)
+
+样本: sample_131
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_motion_deblurring (PSNR改进 -57.44dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -83.54dB)
+
+样本: sample_127
+  退化类型: dark
+  退化图基线: PSNR=15.99dB, SSIM=0.8863, LPIPS=0.0869
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +0.75dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -6.54dB)
+
+样本: sample_135
+  退化类型: low resolution
+  退化图基线: PSNR=49.79dB, SSIM=0.9981, LPIPS=0.0022
+  最佳工具: restormer_deraining (PSNR改进 -6.21dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -34.43dB)
+
+样本: sample_132
+  退化类型: motion blur
+  退化图基线: PSNR=20.96dB, SSIM=0.5496, LPIPS=0.3115
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +0.38dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -6.11dB)
+
+样本: sample_133
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: mprnet_motion_deblurring (PSNR改进 -54.01dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -91.77dB)
+
+样本: sample_123
+  退化类型: dark
+  退化图基线: PSNR=18.22dB, SSIM=0.5203, LPIPS=0.2304
+  最佳工具: xrestormer_deraining (PSNR改进 +0.95dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -1.43dB)
+
+样本: sample_129
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=36.02dB, SSIM=0.8764, LPIPS=0.2828
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +0.87dB)
+  最差工具: restormer_defocus_deblurring (PSNR改进 -10.21dB)
+
+样本: sample_124
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=30.69dB, SSIM=0.8250, LPIPS=0.5208
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +5.95dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -2.47dB)
+
+样本: sample_140
+  退化类型: noise
+  退化图基线: PSNR=33.83dB, SSIM=0.7477, LPIPS=0.1683
+  最佳工具: mprnet_denoising (PSNR改进 +6.89dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -25.12dB)
+
+样本: sample_137
+  退化类型: rain
+  退化图基线: PSNR=20.82dB, SSIM=0.5958, LPIPS=0.6023
+  最佳工具: xrestormer_deraining (PSNR改进 +18.96dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -3.17dB)
+
+样本: sample_142
+  退化类型: low resolution
+  退化图基线: PSNR=49.23dB, SSIM=0.9972, LPIPS=0.0022
+  最佳工具: restormer_motion_deblurring (PSNR改进 -2.02dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -29.26dB)
+
+样本: sample_138
+  退化类型: motion blur
+  退化图基线: PSNR=22.00dB, SSIM=0.8340, LPIPS=0.1646
+  最佳工具: mprnet_motion_deblurring (PSNR改进 +7.57dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -6.99dB)
+
+样本: sample_139
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=34.05dB, SSIM=0.9389, LPIPS=0.0340
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +3.20dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -13.99dB)
+
+样本: sample_143
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=23.45dB, SSIM=0.8035, LPIPS=0.2678
+  最佳工具: swinir_jpeg_artifact_removal (PSNR改进 +1.36dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -9.42dB)
+
+样本: sample_146
+  退化类型: noise
+  退化图基线: PSNR=17.84dB, SSIM=0.2273, LPIPS=0.6862
+  最佳工具: mprnet_denoising (PSNR改进 +8.98dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -12.68dB)
+
+样本: sample_147
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=29.45dB, SSIM=0.8534, LPIPS=0.2081
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +3.64dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -10.43dB)
+
+样本: sample_144
+  退化类型: motion blur
+  退化图基线: PSNR=21.99dB, SSIM=0.5476, LPIPS=0.5042
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 -0.03dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -4.63dB)
+
+样本: sample_151
+  退化类型: noise
+  退化图基线: PSNR=20.68dB, SSIM=0.3361, LPIPS=0.8941
+  最佳工具: swinir_denoising (PSNR改进 +8.69dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -5.53dB)
+
+样本: sample_152
+  退化类型: rain
+  退化图基线: PSNR=18.84dB, SSIM=0.5771, LPIPS=0.4442
+  最佳工具: restormer_deraining (PSNR改进 +15.74dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -4.97dB)
+
+样本: sample_141
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 -54.18dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -80.32dB)
+
+样本: sample_149
+  退化类型: motion blur
+  退化图基线: PSNR=27.20dB, SSIM=0.8523, LPIPS=0.2288
+  最佳工具: mprnet_denoising (PSNR改进 +0.04dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -5.00dB)
+
+样本: sample_148
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=31.52dB, SSIM=0.9331, LPIPS=0.0346
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +2.59dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -14.61dB)
+
+样本: sample_157
+  退化类型: dark
+  退化图基线: PSNR=22.58dB, SSIM=0.9647, LPIPS=0.0103
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +1.42dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -3.09dB)
+
+样本: sample_145
+  退化类型: defocus blur
+  退化图基线: PSNR=33.66dB, SSIM=0.9316, LPIPS=0.0907
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +5.27dB)
+  最差工具: restormer_motion_deblurring (PSNR改进 -17.22dB)
+
+样本: sample_150
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=27.22dB, SSIM=0.8156, LPIPS=0.2292
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +1.39dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -6.96dB)
+
+样本: sample_154
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=34.11dB, SSIM=0.8427, LPIPS=0.4151
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +2.71dB)
+  最差工具: xrestormer_deraining (PSNR改进 -14.06dB)
+
+样本: sample_161
+  退化类型: low resolution
+  退化图基线: PSNR=43.36dB, SSIM=0.9975, LPIPS=0.0025
+  最佳工具: restormer_motion_deblurring (PSNR改进 -3.16dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -27.56dB)
+
+样本: sample_156
+  退化类型: noise
+  退化图基线: PSNR=26.72dB, SSIM=0.8656, LPIPS=0.0866
+  最佳工具: swinir_denoising (PSNR改进 +3.99dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -13.45dB)
+
+样本: sample_162
+  退化类型: low resolution
+  退化图基线: PSNR=39.22dB, SSIM=0.9951, LPIPS=0.0101
+  最佳工具: restormer_deraining (PSNR改进 -6.15dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -31.17dB)
+
+样本: sample_153
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=31.00dB, SSIM=0.8313, LPIPS=0.2844
+  最佳工具: swinir_jpeg_artifact_removal (PSNR改进 +3.03dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -8.74dB)
+
+样本: sample_164
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=28.35dB, SSIM=0.8271, LPIPS=0.1823
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +3.37dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -10.11dB)
+
+样本: sample_159
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_deraining (PSNR改进 -43.78dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -75.61dB)
+
+样本: sample_166
+  退化类型: defocus blur
+  退化图基线: PSNR=23.37dB, SSIM=0.8026, LPIPS=0.3337
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +1.63dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -5.11dB)
+
+样本: sample_168
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=27.91dB, SSIM=0.8800, LPIPS=0.1458
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +2.62dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -10.37dB)
+
+样本: sample_170
+  退化类型: rain
+  退化图基线: PSNR=27.09dB, SSIM=0.9775, LPIPS=0.0965
+  最佳工具: restormer_deraining (PSNR改进 -0.40dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -12.20dB)
+
+样本: sample_165
+  退化类型: low resolution
+  退化图基线: PSNR=43.46dB, SSIM=0.9950, LPIPS=0.0044
+  最佳工具: restormer_deraining (PSNR改进 -2.06dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -28.25dB)
+
+样本: sample_158
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_motion_deblurring (PSNR改进 -51.57dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -83.36dB)
+
+样本: sample_171
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_motion_deblurring (PSNR改进 -50.93dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -83.00dB)
+
+样本: sample_155
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=33.14dB, SSIM=0.8772, LPIPS=0.1495
+  最佳工具: swinir_jpeg_artifact_removal (PSNR改进 +3.37dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -7.92dB)
+
+样本: sample_160
+  退化类型: motion blur
+  退化图基线: PSNR=26.42dB, SSIM=0.8461, LPIPS=0.0911
+  最佳工具: restormer_motion_deblurring (PSNR改进 +0.71dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -12.38dB)
+
+样本: sample_169
+  退化类型: low resolution
+  退化图基线: PSNR=40.65dB, SSIM=0.9966, LPIPS=0.0024
+  最佳工具: restormer_motion_deblurring (PSNR改进 -1.14dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -33.04dB)
+
+样本: sample_173
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_deraining (PSNR改进 -51.35dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -78.89dB)
+
+样本: sample_178
+  退化类型: low resolution
+  退化图基线: PSNR=40.85dB, SSIM=0.9976, LPIPS=0.0038
+  最佳工具: restormer_motion_deblurring (PSNR改进 +0.72dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -27.99dB)
+
+样本: sample_174
+  退化类型: motion blur
+  退化图基线: PSNR=23.58dB, SSIM=0.6812, LPIPS=0.3040
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +0.54dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -4.24dB)
+
+样本: sample_175
+  退化类型: defocus blur
+  退化图基线: PSNR=29.89dB, SSIM=0.7806, LPIPS=0.3233
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +0.78dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -18.48dB)
+
+样本: sample_188
+  退化类型: low resolution
+  退化图基线: PSNR=39.60dB, SSIM=0.9961, LPIPS=0.0036
+  最佳工具: restormer_motion_deblurring (PSNR改进 -4.63dB)
+  最差工具: mprnet_motion_deblurring (PSNR改进 -34.84dB)
+
+样本: sample_167
+  退化类型: noise
+  退化图基线: PSNR=29.08dB, SSIM=0.8815, LPIPS=0.0689
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +2.13dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -13.34dB)
+
+样本: sample_179
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_deraining (PSNR改进 -46.30dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -90.86dB)
+
+样本: sample_163
+  退化类型: noise
+  退化图基线: PSNR=35.36dB, SSIM=0.9050, LPIPS=0.0185
+  最佳工具: xrestormer_deraining (PSNR改进 +2.15dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -15.15dB)
+
+样本: sample_184
+  退化类型: low resolution
+  退化图基线: PSNR=48.54dB, SSIM=0.9975, LPIPS=0.0012
+  最佳工具: restormer_motion_deblurring (PSNR改进 -2.43dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -26.93dB)
+
+样本: sample_177
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_deraining (PSNR改进 -52.80dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -84.96dB)
+
+样本: sample_180
+  退化类型: motion blur
+  退化图基线: PSNR=26.82dB, SSIM=0.8507, LPIPS=0.1604
+  最佳工具: mprnet_motion_deblurring (PSNR改进 +0.68dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -6.92dB)
+
+样本: sample_172
+  退化类型: motion blur
+  退化图基线: PSNR=18.32dB, SSIM=0.3466, LPIPS=0.4684
+  最佳工具: mprnet_denoising (PSNR改进 -0.01dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -2.82dB)
+
+样本: sample_181
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_deraining (PSNR改进 -56.82dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -84.80dB)
+
+样本: sample_176
+  退化类型: dark
+  退化图基线: PSNR=16.30dB, SSIM=0.6189, LPIPS=0.1755
+  最佳工具: mprnet_denoising (PSNR改进 +0.54dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -3.33dB)
+
+样本: sample_182
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=23.23dB, SSIM=0.6543, LPIPS=0.3116
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +1.26dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -7.19dB)
+
+样本: sample_187
+  退化类型: rain
+  退化图基线: PSNR=20.22dB, SSIM=0.6038, LPIPS=0.4580
+  最佳工具: xrestormer_deraining (PSNR改进 +15.61dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -4.29dB)
+
+样本: sample_189
+  退化类型: motion blur
+  退化图基线: PSNR=22.55dB, SSIM=0.8247, LPIPS=0.1152
+  最佳工具: mprnet_motion_deblurring (PSNR改进 +7.43dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -7.20dB)
+
+样本: sample_185
+  退化类型: haze
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具: restormer_motion_deblurring (PSNR改进 -49.46dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -84.55dB)
+
+样本: sample_183
+  退化类型: defocus blur
+  退化图基线: PSNR=25.30dB, SSIM=0.6801, LPIPS=0.4258
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +3.56dB)
+  最差工具: swinir_super_resolution (PSNR改进 -1.54dB)
+
+样本: sample_186
+  退化类型: motion blur
+  退化图基线: PSNR=22.62dB, SSIM=0.8422, LPIPS=0.1398
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +1.90dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -7.33dB)
+
+样本: sample_191
+  退化类型: rain
+  退化图基线: PSNR=19.17dB, SSIM=0.7187, LPIPS=0.4051
+  最佳工具: restormer_deraining (PSNR改进 +10.26dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -7.58dB)
+
+样本: sample_194
+  退化类型: dark
+  退化图基线: PSNR=17.29dB, SSIM=0.9626, LPIPS=0.0281
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +1.45dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -2.77dB)
+
+样本: sample_192
+  退化类型: defocus blur
+  退化图基线: PSNR=20.79dB, SSIM=0.5488, LPIPS=0.5015
+  最佳工具: restormer_defocus_deblurring (PSNR改进 +2.52dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -1.48dB)
+
+样本: sample_196
+  退化类型: motion blur
+  退化图基线: PSNR=41.89dB, SSIM=0.9834, LPIPS=0.0252
+  最佳工具: restormer_deraining (PSNR改进 -0.21dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -23.81dB)
+
+样本: sample_193
+  退化类型: noise
+  退化图基线: PSNR=28.42dB, SSIM=0.6744, LPIPS=0.2538
+  最佳工具: swinir_denoising (PSNR改进 +5.40dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -10.66dB)
+
+样本: sample_199
+  退化类型: motion blur
+  退化图基线: PSNR=30.57dB, SSIM=0.8766, LPIPS=0.1497
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 -0.14dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -13.50dB)
+
+样本: sample_190
+  退化类型: rain
+  退化图基线: PSNR=23.52dB, SSIM=0.9267, LPIPS=0.2379
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +0.75dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -8.94dB)
+
+样本: sample_198
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=28.81dB, SSIM=0.8694, LPIPS=0.0387
+  最佳工具: swinir_jpeg_artifact_removal (PSNR改进 +4.34dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -12.84dB)
+
+样本: sample_197
+  退化类型: noise
+  退化图基线: PSNR=33.77dB, SSIM=0.8467, LPIPS=0.0330
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +2.63dB)
+  最差工具: xrestormer_motion_deblurring (PSNR改进 -12.03dB)
+
+样本: sample_195
+  退化类型: defocus blur
+  退化图基线: PSNR=29.95dB, SSIM=0.9613, LPIPS=0.0943
+  最佳工具: drbnet_defocus_deblurring (PSNR改进 +0.77dB)
+  最差工具: dehazeformer_dehaze (PSNR改进 -8.02dB)
+
+================================================================================
+3. 工具针对性分析（对口 vs 不对口）
+================================================================================
+
+工具: swinir_denoising
+  针对退化: noise
+  对口样本: 22个, 平均PSNR改进 +5.66dB
+  非对口样本: 178个, 平均PSNR改进 -11.88dB
+  针对性差异: +17.54dB (✅ 工具有很强的针对性)
+
+工具: mprnet_denoising
+  针对退化: noise
+  对口样本: 22个, 平均PSNR改进 +4.41dB
+  非对口样本: 178个, 平均PSNR改进 -11.68dB
+  针对性差异: +16.09dB (✅ 工具有很强的针对性)
+
+工具: restormer_motion_deblurring
+  针对退化: motion blur
+  对口样本: 29个, 平均PSNR改进 -0.21dB
+  非对口样本: 171个, 平均PSNR改进 -9.71dB
+  针对性差异: +9.51dB (✅ 工具有很强的针对性)
+
+工具: xrestormer_motion_deblurring
+  针对退化: motion blur
+  对口样本: 29个, 平均PSNR改进 -3.92dB
+  非对口样本: 171个, 平均PSNR改进 -19.50dB
+  针对性差异: +15.58dB (✅ 工具有很强的针对性)
+
+工具: mprnet_motion_deblurring
+  针对退化: motion blur
+  对口样本: 29个, 平均PSNR改进 -0.27dB
+  非对口样本: 171个, 平均PSNR改进 -12.62dB
+  针对性差异: +12.35dB (✅ 工具有很强的针对性)
+
+工具: restormer_defocus_deblurring
+  针对退化: defocus blur
+  对口样本: 22个, 平均PSNR改进 -0.90dB
+  非对口样本: 178个, 平均PSNR改进 -13.42dB
+  针对性差异: +12.52dB (✅ 工具有很强的针对性)
+
+工具: drbnet_defocus_deblurring
+  针对退化: defocus blur
+  对口样本: 22个, 平均PSNR改进 +0.60dB
+  非对口样本: 178个, 平均PSNR改进 -10.74dB
+  针对性差异: +11.34dB (✅ 工具有很强的针对性)
+
+工具: restormer_deraining
+  针对退化: rain
+  对口样本: 17个, 平均PSNR改进 +9.18dB
+  非对口样本: 183个, 平均PSNR改进 -8.53dB
+  针对性差异: +17.71dB (✅ 工具有很强的针对性)
+
+工具: xrestormer_deraining
+  针对退化: rain
+  对口样本: 17个, 平均PSNR改进 +8.27dB
+  非对口样本: 183个, 平均PSNR改进 -12.45dB
+  针对性差异: +20.72dB (✅ 工具有很强的针对性)
+
+工具: mprnet_deraining
+  针对退化: rain
+  对口样本: 17个, 平均PSNR改进 +5.70dB
+  非对口样本: 183个, 平均PSNR改进 -10.12dB
+  针对性差异: +15.82dB (✅ 工具有很强的针对性)
+
+工具: swinir_jpeg_artifact_removal
+  针对退化: jpeg compression artifact
+  对口样本: 27个, 平均PSNR改进 +2.01dB
+  非对口样本: 173个, 平均PSNR改进 -12.02dB
+  针对性差异: +14.03dB (✅ 工具有很强的针对性)
+
+工具: fbcnn_jpeg_artifact_removal
+  针对退化: jpeg compression artifact
+  对口样本: 27个, 平均PSNR改进 +2.41dB
+  非对口样本: 173个, 平均PSNR改进 -9.30dB
+  针对性差异: +11.71dB (✅ 工具有很强的针对性)
+
+工具: swinir_super_resolution
+  针对退化: low resolution
+  对口样本: 27个, 平均PSNR改进 -17.75dB
+  非对口样本: 173个, 平均PSNR改进 -11.23dB
+  针对性差异: -6.52dB (⚠️ 工具针对性不强)
+
+工具: dehazeformer_dehaze
+  针对退化: haze
+  对口样本: 26个, 平均PSNR改进 -84.36dB
+  非对口样本: 174个, 平均PSNR改进 -7.57dB
+  针对性差异: -76.78dB (⚠️ 工具针对性不强)
+
+================================================================================
+4. 按退化类型的详细分析
+================================================================================
+
+退化类型: low resolution
+  样本数: 27
+  退化图基线: PSNR=41.65dB, SSIM=0.9954, LPIPS=0.0052
+  最佳工具TOP5:
+    1. restormer_motion_deblurring: PSNR -6.49dB, SSIM -0.0198, LPIPS -0.0171
+    2. restormer_deraining: PSNR -7.10dB, SSIM -0.0170, LPIPS -0.0136
+    3. fbcnn_jpeg_artifact_removal: PSNR -7.45dB, SSIM -0.0215, LPIPS -0.0058
+    4. mprnet_deraining: PSNR -9.74dB, SSIM -0.0256, LPIPS -0.0203
+    5. drbnet_defocus_deblurring: PSNR -11.34dB, SSIM -0.0270, LPIPS -0.0178
+
+退化类型: dark
+  样本数: 30
+  退化图基线: PSNR=21.89dB, SSIM=0.9903, LPIPS=0.0167
+  最佳工具TOP5:
+    1. restormer_defocus_deblurring: PSNR +0.60dB, SSIM -0.0355, LPIPS -0.0587
+    2. drbnet_defocus_deblurring: PSNR +0.26dB, SSIM +0.0017, LPIPS -0.0467
+    3. restormer_motion_deblurring: PSNR +0.02dB, SSIM -0.0046, LPIPS -0.0124
+    4. fbcnn_jpeg_artifact_removal: PSNR -0.02dB, SSIM -0.0139, LPIPS -0.0052
+    5. mprnet_denoising: PSNR -0.03dB, SSIM -0.0618, LPIPS -0.1113
+
+退化类型: defocus blur
+  样本数: 22
+  退化图基线: PSNR=45.08dB, SSIM=0.9870, LPIPS=0.0650
+  最佳工具TOP5:
+    1. drbnet_defocus_deblurring: PSNR +0.60dB, SSIM +0.0498, LPIPS +0.1599
+    2. fbcnn_jpeg_artifact_removal: PSNR +0.04dB, SSIM -0.0007, LPIPS -0.0025
+    3. restormer_deraining: PSNR -0.09dB, SSIM -0.0021, LPIPS -0.0051
+    4. mprnet_deraining: PSNR -0.24dB, SSIM -0.0084, LPIPS -0.0127
+    5. mprnet_motion_deblurring: PSNR -0.31dB, SSIM +0.0047, LPIPS +0.0401
+
+退化类型: rain
+  样本数: 17
+  退化图基线: PSNR=19.79dB, SSIM=0.6406, LPIPS=0.4425
+  最佳工具TOP5:
+    1. restormer_deraining: PSNR +9.18dB, SSIM +0.1936, LPIPS +0.2346
+    2. xrestormer_deraining: PSNR +8.27dB, SSIM +0.1795, LPIPS +0.2198
+    3. mprnet_deraining: PSNR +5.70dB, SSIM +0.1476, LPIPS +0.1680
+    4. drbnet_defocus_deblurring: PSNR +0.40dB, SSIM -0.0030, LPIPS -0.0050
+    5. fbcnn_jpeg_artifact_removal: PSNR -0.19dB, SSIM -0.0100, LPIPS -0.0013
+
+退化类型: motion blur
+  样本数: 29
+  退化图基线: PSNR=26.02dB, SSIM=0.7891, LPIPS=0.2502
+  最佳工具TOP5:
+    1. fbcnn_jpeg_artifact_removal: PSNR -0.09dB, SSIM -0.0096, LPIPS -0.0077
+    2. restormer_deraining: PSNR -0.18dB, SSIM -0.0164, LPIPS -0.0217
+    3. restormer_motion_deblurring: PSNR -0.21dB, SSIM -0.0299, LPIPS +0.0870
+    4. mprnet_motion_deblurring: PSNR -0.27dB, SSIM -0.0277, LPIPS +0.0801
+    5. mprnet_denoising: PSNR -0.32dB, SSIM -0.0364, LPIPS -0.0711
+
+退化类型: jpeg compression artifact
+  样本数: 27
+  退化图基线: PSNR=29.20dB, SSIM=0.8402, LPIPS=0.1308
+  最佳工具TOP5:
+    1. fbcnn_jpeg_artifact_removal: PSNR +2.41dB, SSIM +0.0394, LPIPS +0.0240
+    2. swinir_jpeg_artifact_removal: PSNR +2.01dB, SSIM +0.0326, LPIPS +0.0087
+    3. swinir_denoising: PSNR +0.59dB, SSIM -0.0057, LPIPS -0.0868
+    4. restormer_deraining: PSNR +0.02dB, SSIM +0.0024, LPIPS -0.0030
+    5. mprnet_denoising: PSNR -0.06dB, SSIM +0.0002, LPIPS -0.0488
+
+退化类型: noise
+  样本数: 22
+  退化图基线: PSNR=18.74dB, SSIM=0.3539, LPIPS=0.5043
+  最佳工具TOP5:
+    1. swinir_denoising: PSNR +5.66dB, SSIM +0.2223, LPIPS +0.1156
+    2. mprnet_denoising: PSNR +4.41dB, SSIM +0.2709, LPIPS +0.0932
+    3. fbcnn_jpeg_artifact_removal: PSNR +2.69dB, SSIM +0.0927, LPIPS -0.0288
+    4. drbnet_defocus_deblurring: PSNR +1.87dB, SSIM +0.0832, LPIPS +0.0113
+    5. swinir_super_resolution: PSNR +1.75dB, SSIM +0.2035, LPIPS -0.0058
+
+退化类型: haze
+  样本数: 26
+  退化图基线: PSNR=100.00dB, SSIM=1.0000, LPIPS=0.0000
+  最佳工具TOP5:
+    1. restormer_deraining: PSNR -52.36dB, SSIM -0.0053, LPIPS -0.0139
+    2. restormer_motion_deblurring: PSNR -54.17dB, SSIM -0.0076, LPIPS -0.0133
+    3. fbcnn_jpeg_artifact_removal: PSNR -56.18dB, SSIM -0.0109, LPIPS -0.0072
+    4. mprnet_motion_deblurring: PSNR -58.51dB, SSIM -0.0173, LPIPS -0.0226
+    5. mprnet_deraining: PSNR -60.84dB, SSIM -0.0230, LPIPS -0.0534
+

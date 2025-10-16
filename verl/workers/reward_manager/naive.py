@@ -175,9 +175,8 @@ class NaiveRewardManager:
                     # 添加退化类型信息（用于wandb展示）
                     degradation_type = score.get("degradation_type", "unknown")
                     reward_extra_info['degradation_type'].append(degradation_type)
-                    # 如果有完整的退化类型列表也保存
-                    if "degradation_types_all" in score:
-                        reward_extra_info['degradation_types_all'].append(score.get("degradation_types_all"))
+                    # 保存完整的退化类型列表（现在每个样本都有此字段）
+                    reward_extra_info['degradation_types_all'].append(score.get("degradation_types_all", ""))
                 else:
                     degradation_score = 0.0
                     reward_extra_info['ir_is_clean_sample'].append(0.0)
@@ -187,6 +186,7 @@ class NaiveRewardManager:
                     reward_extra_info['ir_quality_score'].append(0.0)
                     reward_extra_info['ir_degradation_type_score'].append(0.0)
                     reward_extra_info['degradation_type'].append("unknown")
+                    reward_extra_info['degradation_types_all'].append("")  # 为else分支也添加默认值
                 reward_extra_info['ir_degradation_order_score'].append(degradation_score)
                 
                 # 统计总奖励分数（包含格式+图像质量）

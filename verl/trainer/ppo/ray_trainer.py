@@ -598,6 +598,11 @@ class RayPPOTrainer:
             batch_count += 1
             print(f"[DEBUG VAL DATALOADER] Step {self.global_steps}: Processing batch {batch_idx}, test_data keys: {test_data.keys() if isinstance(test_data, dict) else 'not a dict'}")
             test_batch = DataProto.from_single_dict(test_data)
+            
+            # 将数据集中的'prompt'字段保存为'raw_prompt'（如果存在）
+            if 'prompt' in test_data and 'raw_prompt' not in test_batch.non_tensor_batch:
+                test_batch.non_tensor_batch['raw_prompt'] = test_data['prompt']
+                print(f"[DEBUG VAL] Added 'prompt' to test_batch.non_tensor_batch as 'raw_prompt', count: {len(test_batch.non_tensor_batch['raw_prompt'])}")
 
             # repeat test batch
             test_batch = test_batch.repeat(
@@ -708,6 +713,16 @@ class RayPPOTrainer:
                     val_raw_prompts.extend(raw_prompts.tolist())
                 elif isinstance(raw_prompts, list):
                     val_raw_prompts.extend(raw_prompts)
+            elif 'prompt' in test_batch.non_tensor_batch:
+                # 如果数据集中字段名是'prompt'而不是'raw_prompt'
+                prompts = test_batch.non_tensor_batch['prompt']
+                print(f"[DEBUG] Found 'prompt' field instead of 'raw_prompt', type: {type(prompts)}")
+                if isinstance(prompts, np.ndarray):
+                    val_raw_prompts.extend(prompts.tolist())
+                elif isinstance(prompts, list):
+                    val_raw_prompts.extend(prompts)
+            else:
+                print(f"[DEBUG] Available keys in test_batch.non_tensor_batch: {list(test_batch.non_tensor_batch.keys())}")
             
             # Collect responses
             if 'responses' in test_batch.batch:
@@ -851,22 +866,26 @@ class RayPPOTrainer:
                     )
                     print(f"[DEBUG WANDB IMAGE] Validation: logged {len(val_image_histories)} sample trajectories")
                     
-                    # 新增：上传预测错误的样本到独立表格
-                    try:
-                        log_validation_wrong_predictions_to_wandb(
-                            wandb_logger=self.logger.logger['wandb'],
-                            batch_data=val_batch_data,
-                            reward_extra_infos_dict=reward_extra_infos_dict,
-                            conversation_histories=val_conversation_histories,
-                            reward_models=val_reward_models,
-                            env_names=val_env_names,
-                            step=self.global_steps,
-                            tokenizer=self.tokenizer,
-                        )
-                    except Exception as e:
-                        print(f"[WARNING] Failed to log wrong predictions to wandb: {e}")
-                        import traceback
-                        traceback.print_exc()
+                    # 新增：上传预测错误的样本到独立表格（可通过环境变量控制）
+                    import os
+                    if os.environ.get('WANDB_LOG_WRONG_PREDICTIONS', 'True').lower() in ['true', '1', 'yes']:
+                        try:
+                            log_validation_wrong_predictions_to_wandb(
+                                wandb_logger=self.logger.logger['wandb'],
+                                batch_data=val_batch_data,
+                                reward_extra_infos_dict=reward_extra_infos_dict,
+                                conversation_histories=val_conversation_histories,
+                                reward_models=val_reward_models,
+                                env_names=val_env_names,
+                                step=self.global_steps,
+                                tokenizer=self.tokenizer,
+                            )
+                        except Exception as e:
+                            print(f"[WARNING] Failed to log wrong predictions to wandb: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    else:
+                        print(f"[INFO] Skipping wrong predictions upload (WANDB_LOG_WRONG_PREDICTIONS=False)")
                         
                 except Exception as e:
                     print(f"[WARNING] Failed to log validation images to wandb: {e}")
@@ -1129,6 +1148,15 @@ class RayPPOTrainer:
                 timing_raw = {}
 
                 batch: DataProto = DataProto.from_single_dict(batch_dict)
+                
+                # 将数据集中的'prompt'字段保存为'raw_prompt'（如果存在）
+                if 'prompt' in batch_dict and 'raw_prompt' not in batch.non_tensor_batch:
+                    batch.non_tensor_batch['raw_prompt'] = batch_dict['prompt']
+                    if self.global_steps == 1:
+                        print(f"[DEBUG] Added 'prompt' to batch.non_tensor_batch as 'raw_prompt'")
+                        print(f"[DEBUG] raw_prompt type: {type(batch.non_tensor_batch['raw_prompt'])}")
+                        if len(batch.non_tensor_batch['raw_prompt']) > 0:
+                            print(f"[DEBUG] First raw_prompt sample: {batch.non_tensor_batch['raw_prompt'][0]}")
 
                 # pop those keys for generation
                 if "multi_modal_inputs" in batch.non_tensor_batch.keys():

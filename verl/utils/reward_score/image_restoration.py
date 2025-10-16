@@ -17,6 +17,63 @@ import json
 import numpy as np
 from typing import List, Dict, Union
 
+# Define allowed tools list (unified for all format checking functions)
+ALLOWED_TOOLS = {
+    # Dehazing
+    "dehazeformer_dehaze",
+    # Deblurring
+    "drbnet_defocus_deblurring", 
+    "xrestormer_motion_deblurring", 
+    "mprnet_motion_deblurring",
+    "restormer_motion_deblurring",
+    "restormer_defocus_deblurring",
+    # Deraining
+    "mprnet_deraining",
+    "restormer_deraining",
+    "xrestormer_deraining",
+    # JPEG artifact removal
+    "swinir_jpeg_artifact_removal", 
+    "fbcnn_jpeg_artifact_removal",
+    # Quality assessment
+    "fbcnn_blind_quality_assessment",
+    # Super resolution
+    "swinir_super_resolution",
+    # Denoising
+    "swinir_denoising", 
+    "mprnet_denoising",
+    "scunet_real_denoising_psnr",
+    "scunet_real_denoising_gan",
+    "scunet_color_denoising",
+    "scunet_gray_denoising",
+    # Low-light enhancement
+    "retinexformer_enhance",
+    "retinexformer_lol_v1",
+    "retinexformer_lol_v2_real",
+    "retinexformer_lol_v2_synthetic",
+    "retinexformer_sdsd_indoor",
+    "retinexformer_sdsd_outdoor",
+    "retinexformer_sid",
+    "retinexformer_smid",
+    "retinexformer_fivek",
+    # Basic adjustments
+    "histogram_equalization",
+    "gamma_correction",
+    "constant_shift",
+    # Visual toolboxes
+    "visual_toolbox",
+    "visual_toolbox_v2",
+    "visual_toolbox_v3", 
+    "visual_toolbox_v4",
+    "visual_toolbox_v5",
+    # RAG tools
+    "rag",
+    "rag_v2",
+    # VL Agent tools
+    "vl_agent",
+    "vl_agent_v2",
+    "vl_agent_v3",
+}
+
 # Import image quality metrics
 try:
     from .image_quality_metrics import ImageQualityMetrics, compute_image_restoration_reward, compute_no_reference_image_restoration_reward
@@ -54,7 +111,7 @@ def check_multiturn_format_v2(response_str: str, is_clean_sample: bool = False) 
     
     Format requirements (ALL must be satisfied):
     1. Each turn must have <think> block with meaningful content (>=10 chars)
-    2. Each turn can have either <tool_call> OR <answer>, not both (can have neither if only thinking)
+    2. Each turn must have either <tool_call> OR <answer> (NOT both, and at least one is REQUIRED)
     3. All JSON formats must be valid (if present)
     4. All tool names must be in the allowed list (if present)
     5. Answer must have valid restoration_log field (only field) if present
@@ -63,43 +120,8 @@ def check_multiturn_format_v2(response_str: str, is_clean_sample: bool = False) 
         1.0: Perfect format (all requirements met)
         -1.0: Any format violation
     """
-    # Define allowed tools (包含所有注册的工具)
-    allowed_tools = {
-        # Dehazing
-        "dehazeformer_dehaze",
-        # Deblurring
-        "drbnet_defocus_deblurring", 
-        "xrestormer_motion_deblurring", 
-        "mprnet_motion_deblurring",
-        "restormer_motion_deblurring",
-        "restormer_defocus_deblurring",
-        # Deraining
-        "mprnet_deraining",
-        "restormer_deraining",
-        "xrestormer_deraining",  # 添加遗漏的XRestormer去雨工具
-        # JPEG artifact removal
-        "swinir_jpeg_artifact_removal", 
-        "fbcnn_jpeg_artifact_removal",
-        # Quality assessment
-        "fbcnn_blind_quality_assessment",  # 添加遗漏的FBCNN质量评估
-        # Super resolution
-        "swinir_super_resolution",
-        # Denoising
-        "swinir_denoising", 
-        "mprnet_denoising",
-        # Basic adjustments
-        "histogram_equalization",
-        "gamma_correction",
-        "constant_shift",
-        # Visual toolboxes
-        "visual_toolbox",
-        "visual_toolbox_v2",
-        "visual_toolbox_v3", 
-        "visual_toolbox_v4",
-        "visual_toolbox_v5",
-        # Image processing
-        "crop_image",
-    }
+    # Use unified allowed tools list
+    allowed_tools = ALLOWED_TOOLS
     
     # Split response into turns (assuming each turn starts with <think>)
     think_pattern = r'<think>(.*?)</think>'
@@ -148,9 +170,12 @@ def check_multiturn_format_v2(response_str: str, is_clean_sample: bool = False) 
             print(f' [STRICT FORMAT] 第{i+1}轮同时包含tool_call和answer')
             return -1.0
         
-        # 4. Can have neither tool_call nor answer (thinking only turn is allowed)
+        # 4. Must have either tool_call or answer (at least one is REQUIRED)
+        if not tool_call_match and not answer_match:
+            print(f' [STRICT FORMAT] 第{i+1}轮既没有tool_call也没有answer（必须至少有一个）')
+            return -1.0
         
-        # 6. Validate tool_call format if present
+        # 5. Validate tool_call format if present
         if tool_call_match:
             try:
                 tool_calls = json.loads(tool_call_match.group(1))
@@ -194,6 +219,145 @@ def check_multiturn_format_v2(response_str: str, is_clean_sample: bool = False) 
     return 1.0
 
 
+def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int = 0, is_clean_sample: bool = False) -> float:
+    """
+    Enhanced multi-turn format checking with additional constraints.
+    
+    Inherits all requirements from check_multiturn_format_v2, plus:
+    6. Answer must be in the FINAL turn only (if present)
+    7. Total tool_call count must be >= degradation_count (for non-clean samples)
+    
+    Args:
+        response_str: The model's response string
+        degradation_count: Number of degradations in the image (for tool_call count validation)
+        is_clean_sample: Whether this is a clean image sample
+    
+    Returns:
+        1.0: Perfect format (all requirements met including new constraints)
+        -1.0: Any format violation
+    """
+    # Use unified allowed tools list
+    allowed_tools = ALLOWED_TOOLS
+    
+    # Split response into turns (assuming each turn starts with <think>)
+    think_pattern = r'<think>(.*?)</think>'
+    think_matches = list(re.finditer(think_pattern, response_str, re.DOTALL))
+    
+    if not think_matches:
+        print(f' [ENHANCED FORMAT] 缺少think块')
+        return -1.0
+    
+    turns = []
+    for i, think_match in enumerate(think_matches):
+        start_pos = think_match.start()
+        end_pos = think_matches[i + 1].start() if i + 1 < len(think_matches) else len(response_str)
+        turn_content = response_str[start_pos:end_pos]
+        turns.append(turn_content)
+    
+    if not turns:
+        print(f' [ENHANCED FORMAT] 没有有效的回合')
+        return -1.0
+    
+    # Track tool_call and answer positions
+    total_tool_calls = 0
+    answer_turns = []  # Track which turns have answers
+    
+    # Check each turn strictly (inherit all checks from v2)
+    for i, turn in enumerate(turns):
+        is_final_turn = (i == len(turns) - 1)
+        
+        # 1. Must have think block with meaningful content
+        think_match = re.search(r'<think>(.*?)</think>', turn, re.DOTALL)
+        if not think_match:
+            print(f' [ENHANCED FORMAT] 第{i+1}轮缺少think块')
+            return -1.0
+        
+        think_content = think_match.group(1).strip()
+        if len(think_content) < 10:
+            print(f' [ENHANCED FORMAT] 第{i+1}轮think内容太短 (< 10字符)')
+            return -1.0
+        
+        # 2. Check tool_call and answer
+        tool_call_match = re.search(r'<tool_call>\s*(\[.*?\])\s*</tool_call>', turn, re.DOTALL)
+        answer_match = re.search(r'<answer>\s*(\{.*?\})\s*</answer>', turn, re.DOTALL)
+        
+        # 3. Cannot have both tool_call and answer in same turn
+        if tool_call_match and answer_match:
+            print(f' [ENHANCED FORMAT] 第{i+1}轮同时包含tool_call和answer')
+            return -1.0
+        
+        # 4. Must have either tool_call or answer (at least one is REQUIRED)
+        if not tool_call_match and not answer_match:
+            print(f' [ENHANCED FORMAT] 第{i+1}轮既没有tool_call也没有answer（必须至少有一个）')
+            return -1.0
+        
+        # 5. Validate tool_call format if present
+        if tool_call_match:
+            try:
+                tool_calls = json.loads(tool_call_match.group(1))
+                if not isinstance(tool_calls, list) or len(tool_calls) == 0:
+                    print(f' [ENHANCED FORMAT] 第{i+1}轮tool_call格式错误（不是非空列表）')
+                    return -1.0
+                
+                # Count total tool calls
+                total_tool_calls += len(tool_calls)
+                
+                for tool_call in tool_calls:
+                    if not isinstance(tool_call, dict):
+                        print(f' [ENHANCED FORMAT] 第{i+1}轮tool_call包含非字典元素')
+                        return -1.0
+                    if 'name' not in tool_call or 'arguments' not in tool_call:
+                        print(f' [ENHANCED FORMAT] 第{i+1}轮tool_call缺少name或arguments字段')
+                        return -1.0
+                    # Check if tool name is in allowed list
+                    if tool_call['name'] not in allowed_tools:
+                        print(f' [ENHANCED FORMAT] 第{i+1}轮使用了未允许的工具: {tool_call["name"]}')
+                        return -1.0
+            except json.JSONDecodeError:
+                print(f' [ENHANCED FORMAT] 第{i+1}轮tool_call JSON解析失败')
+                return -1.0
+        
+        # 6. Validate answer format if present
+        if answer_match:
+            answer_turns.append(i + 1)  # Track which turn has answer (1-indexed)
+            
+            try:
+                answer_json = json.loads(answer_match.group(1))
+                if 'restoration_log' not in answer_json:
+                    print(f' [ENHANCED FORMAT] 第{i+1}轮answer缺少restoration_log字段')
+                    return -1.0
+                if not isinstance(answer_json['restoration_log'], list):
+                    print(f' [ENHANCED FORMAT] 第{i+1}轮restoration_log不是列表')
+                    return -1.0
+                # Strict: only restoration_log field
+                if len(answer_json.keys()) != 1:
+                    print(f' [ENHANCED FORMAT] 第{i+1}轮answer包含额外字段（应该只有restoration_log）')
+                    return -1.0
+            except json.JSONDecodeError:
+                print(f' [ENHANCED FORMAT] 第{i+1}轮answer JSON解析失败')
+                return -1.0
+    
+    # NEW CONSTRAINT 1: Answer must be in the FINAL turn only
+    if answer_turns:
+        if len(answer_turns) > 1:
+            print(f' [ENHANCED FORMAT] Answer出现在多个轮次: {answer_turns}，只能在最后一轮')
+            return -1.0
+        if answer_turns[0] != len(turns):
+            print(f' [ENHANCED FORMAT] Answer出现在第{answer_turns[0]}轮，但应该在最后一轮（第{len(turns)}轮）')
+            return -1.0
+    
+    # NEW CONSTRAINT 2: Tool_call count must be >= degradation_count (for non-clean samples)
+    if not is_clean_sample and degradation_count > 0:
+        if total_tool_calls < degradation_count:
+            print(f' [ENHANCED FORMAT] Tool_call数量不足: {total_tool_calls} < {degradation_count}（退化数量）')
+            return -1.0
+        print(f' [ENHANCED FORMAT] Tool_call数量验证通过: {total_tool_calls} >= {degradation_count}')
+    
+    # All checks passed (including enhanced constraints)
+    print(f' [ENHANCED FORMAT] 所有检查通过: 轮次={len(turns)}, tool_calls={total_tool_calls}, answer_turns={answer_turns}')
+    return 1.0
+
+
 def check_response_format_strict_v2(response_str: str, content_aware: bool = False) -> float:
     """
     Strict format checking for v2 format: only give reward if format is completely correct.
@@ -204,55 +368,19 @@ def check_response_format_strict_v2(response_str: str, content_aware: bool = Fal
     
     Format rules (for single response):
     1. 每轮对话都必须有<think>块，包含简短推理
-    2. <tool_call>和<answer>不能在同一个回合中同时出现
-    3. <answer>必须包含valid JSON with restoration_log (only field) if present
-    4. tool_call中的工具名称必须是system prompt中允许的工具 if present
-    
-    Note: 不要求必须有tool_call或answer，只有think也是可以的
+    2. 必须有<tool_call>或<answer>之一（至少一个是必需的）
+    3. <tool_call>和<answer>不能在同一个回合中同时出现
+    4. <answer>必须包含valid JSON with restoration_log (only field) if present
+    5. tool_call中的工具名称必须是system prompt中允许的工具 if present
     
     Content-aware rules (only when content_aware=True):
-    5. 如果检测到退化，必须有<tool_call>
-    6. 如果图像干净，必须有<answer>
+    6. 如果检测到退化，必须有<tool_call>
+    7. 如果图像干净，必须有<answer>
     
     Returns 1.0 if perfect, 0.0 if any format violation.
     """
-    # Define allowed tools from system prompt (包含所有注册的工具)
-    allowed_tools = {
-        # Dehazing
-        "dehazeformer_dehaze",
-        # Deblurring
-        "drbnet_defocus_deblurring", 
-        "xrestormer_motion_deblurring", 
-        "mprnet_motion_deblurring",
-        "restormer_motion_deblurring",
-        "restormer_defocus_deblurring",
-        # Deraining
-        "mprnet_deraining",
-        "restormer_deraining",
-        "xrestormer_deraining",  # 添加遗漏的XRestormer去雨工具
-        # JPEG artifact removal
-        "swinir_jpeg_artifact_removal", 
-        "fbcnn_jpeg_artifact_removal",
-        # Quality assessment
-        "fbcnn_blind_quality_assessment",  # 添加遗漏的FBCNN质量评估
-        # Super resolution
-        "swinir_super_resolution",
-        # Denoising
-        "swinir_denoising", 
-        "mprnet_denoising",
-        # Basic adjustments
-        "histogram_equalization",
-        "gamma_correction",
-        "constant_shift",
-        # Visual toolboxes
-        "visual_toolbox",
-        "visual_toolbox_v2",
-        "visual_toolbox_v3", 
-        "visual_toolbox_v4",
-        "visual_toolbox_v5",
-        # Image processing
-        "crop_image",
-    }
+    # Use unified allowed tools list
+    allowed_tools = ALLOWED_TOOLS
     
     format_score = 0.0
     
@@ -273,7 +401,9 @@ def check_response_format_strict_v2(response_str: str, content_aware: bool = Fal
     if tool_call_match and answer_match:
         return 0.0
     
-    # 4. Can have neither (thinking only is allowed)
+    # 4. Must have either tool_call or answer (at least one is REQUIRED)
+    if not tool_call_match and not answer_match:
+        return 0.0
     
     # 5. Validate tool_call format if present
     if tool_call_match:
@@ -325,46 +455,11 @@ def check_response_format_v2(response_str: str) -> float:
     
     Format rules:
     1. Must have <think> block with meaningful content
-    2. <tool_call> and <answer> cannot coexist in same response
-    3. Can have only <think> (neither tool_call nor answer)
+    2. Must have either <tool_call> OR <answer> (at least one is REQUIRED)
+    3. <tool_call> and <answer> cannot coexist in same response
     """
-    # Define allowed tools from system prompt (包含所有注册的工具)
-    allowed_tools = {
-        # Dehazing
-        "dehazeformer_dehaze",
-        # Deblurring
-        "drbnet_defocus_deblurring", 
-        "xrestormer_motion_deblurring", 
-        "mprnet_motion_deblurring",
-        "restormer_motion_deblurring",
-        "restormer_defocus_deblurring",
-        # Deraining
-        "mprnet_deraining",
-        "restormer_deraining",
-        "xrestormer_deraining",  # 添加遗漏的XRestormer去雨工具
-        # JPEG artifact removal
-        "swinir_jpeg_artifact_removal", 
-        "fbcnn_jpeg_artifact_removal",
-        # Quality assessment
-        "fbcnn_blind_quality_assessment",  # 添加遗漏的FBCNN质量评估
-        # Super resolution
-        "swinir_super_resolution",
-        # Denoising
-        "swinir_denoising", 
-        "mprnet_denoising",
-        # Basic adjustments
-        "histogram_equalization",
-        "gamma_correction",
-        "constant_shift",
-        # Visual toolboxes
-        "visual_toolbox",
-        "visual_toolbox_v2",
-        "visual_toolbox_v3", 
-        "visual_toolbox_v4",
-        "visual_toolbox_v5",
-        # Image processing
-        "crop_image",
-    }
+    # Use unified allowed tools list
+    allowed_tools = ALLOWED_TOOLS
     
     format_score = 0.0
     
@@ -394,7 +489,10 @@ def check_response_format_v2(response_str: str) -> float:
         format_score -= 0.8  # Heavy penalty for format violation
         return max(format_score, 0.0)
     
-    # 4. Can have neither action (thinking only is allowed)
+    # 4. Must have either tool_call or answer (at least one is REQUIRED)
+    if not tool_call_match and not answer_match:
+        format_score -= 0.6  # Major penalty for missing action
+        return max(format_score, 0.0)
     
     # 5. Validate and score tool_call if present (0.4 points)
     if tool_call_match:
@@ -1225,7 +1323,8 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
                      use_no_reference: bool = True, enable_degradation_type_reward: bool = False,
                      degradation_type_reward_weight: float = 1.0,
                      format_reward_weight: float = 0.3,
-                     quality_reward_weight: float = 0.7) -> float:
+                     quality_reward_weight: float = 0.7,
+                     use_enhanced_format: bool = False) -> float:
     """
     Compute reward score for image restoration task (v2 format).
     
@@ -1248,6 +1347,9 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
         degradation_type_reward_weight: 退化类型奖励的权重系数（默认1.0）
         format_reward_weight: 格式奖励的权重系数（默认0.3）
         quality_reward_weight: 图像质量奖励的权重系数（默认0.7）
+        use_enhanced_format: 是否使用增强格式检查（默认False）
+                           - True: 使用check_multiturn_format_v3_enhanced，增加answer必须在最后一轮、tool_call数量>=退化数量的约束
+                           - False: 使用原有的check_multiturn_format_v2
     
     奖励结构说明:
         默认奖励 = FORMAT_WEIGHT × format_score + QUALITY_WEIGHT × quality_score
@@ -1286,12 +1388,46 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
         degradation_addition_order = []
     
     # Extract predicted restoration log
-    predicted_log = extract_restoration_log_from_response_v2(solution_str)
+    # 单轮对话模式：直接从 <tool_call> 提取退化类型（避免依赖 <answer> 块）
+    predicted_log = []
+    try:
+        import re
+        import json
+        # 从 tool_call 提取退化类型
+        tool_call_matches = re.finditer(r'<tool_call>\s*(\[.*?\])\s*</tool_call>', solution_str, re.DOTALL)
+        for tool_call_match in tool_call_matches:
+            tools = json.loads(tool_call_match.group(1))
+            if isinstance(tools, list):
+                for tool_dict in tools:
+                    if isinstance(tool_dict, dict):
+                        # 优先使用 degradation 字段（新格式）
+                        if 'degradation' in tool_dict:
+                            deg_type = tool_dict['degradation']
+                            if deg_type and deg_type not in predicted_log:
+                                predicted_log.append(deg_type)
+                        # 如果没有 degradation 字段，不添加（避免用工具名称推断）
+    except Exception as e:
+        print(f' [DEBUG] 从 tool_call 提取退化类型失败: {e}')
+    
+    # 如果 tool_call 中没有提取到，尝试从 <answer> 块的 restoration_log 提取（兼容旧格式）
+    if not predicted_log:
+        predicted_log = extract_restoration_log_from_response_v2(solution_str)
+        if predicted_log:
+            print(f' [DEBUG] 从 restoration_log 提取到退化类型: {predicted_log} (兼容旧格式)')
     
     # Compute format score with content-aware checking for non-clean samples
     if strict_format:
-        # Use multi-turn format checking for strict mode (已经内置了clean/non-clean判断)
-        format_score = check_multiturn_format_v2(solution_str, is_clean_sample=is_clean_sample)
+        if use_enhanced_format:
+            # Use enhanced multi-turn format checking with additional constraints
+            degradation_count = len(degradation_addition_order)
+            format_score = check_multiturn_format_v3_enhanced(
+                solution_str, 
+                degradation_count=degradation_count, 
+                is_clean_sample=is_clean_sample
+            )
+        else:
+            # Use standard multi-turn format checking for strict mode (已经内置了clean/non-clean判断)
+            format_score = check_multiturn_format_v2(solution_str, is_clean_sample=is_clean_sample)
     else:
         format_score = check_response_format_v2(solution_str)
         
@@ -1420,19 +1556,25 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
     
     # 添加退化类型信息（直接从数据集的reward_model获取）
     degradation_type = "unknown"
+    degradation_types_all = ""  # 确保每个样本都有这个字段
+    
     if is_clean_sample:
         degradation_type = "clean"
-    elif reward_model and len(reward_model) > 0:
+        degradation_types_all = "clean"
+    elif reward_model is not None and len(reward_model) > 0:
         # 直接从reward_model的第一个元素中获取degradation_type
         if isinstance(reward_model[0], dict) and 'degradation_type' in reward_model[0]:
             degradation_type = reward_model[0]['degradation_type']
-            # 如果有多个退化类型，保存完整列表
-            if len(reward_model) > 1:
-                all_types = [item.get('degradation_type', '') for item in reward_model if isinstance(item, dict) and 'degradation_type' in item]
-                if all_types:
-                    result_dict["degradation_types_all"] = ", ".join(all_types)
+            
+            # 总是生成完整的退化类型列表（无论单个还是多个）
+            all_types = [item.get('degradation_type', '') for item in reward_model if isinstance(item, dict) and 'degradation_type' in item]
+            if all_types:
+                degradation_types_all = ", ".join(all_types)
+            else:
+                degradation_types_all = degradation_type  # 单个退化类型的情况
     
     result_dict["degradation_type"] = degradation_type
+    result_dict["degradation_types_all"] = degradation_types_all  # 确保每个样本都有此字段
     
     # 添加clean准确率统计（对所有模式都添加is_clean_sample标记）
     if is_clean_sample:

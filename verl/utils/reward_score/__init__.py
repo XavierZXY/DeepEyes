@@ -96,9 +96,13 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
         enable_degradation_type_reward = os.environ.get('ENABLE_DEGRADATION_TYPE_REWARD', 'False').lower() == 'true'
         degradation_type_reward_weight = float(os.environ.get('DEGRADATION_TYPE_REWARD_WEIGHT', '1.0'))
         
+        # 增强格式检查配置
+        use_enhanced_format = os.environ.get('USE_ENHANCED_FORMAT', 'False').lower() == 'true'
+        
         print(f"[INFO] Image Quality Reward Config: use_no_reference={use_no_reference}, discretize_levels={discretize_levels}")
         print(f"[INFO] Reward Weights: format={format_reward_weight}, quality={quality_reward_weight}")
         print(f"[INFO] Degradation Type Reward Config: enable={enable_degradation_type_reward}, weight={degradation_type_reward_weight}")
+        print(f"[INFO] Enhanced Format Check: enabled={use_enhanced_format}")
         
         res = image_restoration.compute_score_v2(
             solution_str, 
@@ -110,6 +114,7 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
             degradation_type_reward_weight=degradation_type_reward_weight,  # 退化类型奖励权重
             format_reward_weight=format_reward_weight,      # 格式奖励权重
             quality_reward_weight=quality_reward_weight,    # 图像质量奖励权重
+            use_enhanced_format=use_enhanced_format,        # 是否使用增强格式检查
         )
         
         # 注意：

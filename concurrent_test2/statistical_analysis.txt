@@ -1,0 +1,132 @@
+================================================================================
+统计分析报告
+================================================================================
+
+================================================================================
+1. 按工具分析（对所有退化类型的表现）
+================================================================================
+
+工具: fbcnn_jpeg_artifact_removal
+  成功率: 100.0%
+  PSNR改进: 平均-1.52dB, 标准差4.48, 范围[-7.75, +2.62]
+  SSIM改进: 平均+0.0183, 中位数-0.0072
+  LPIPS改进: 平均+0.0025, 中位数-0.0083
+
+工具: mprnet_denoising
+  成功率: 100.0%
+  PSNR改进: 平均-3.10dB, 标准差10.56, 范围[-16.26, +11.77]
+  SSIM改进: 平均+0.0707, 中位数-0.0292
+  LPIPS改进: 平均-0.0046, 中位数-0.0686
+
+工具: restormer_motion_deblurring
+  成功率: 100.0%
+  PSNR改进: 平均-2.87dB, 标准差2.90, 范围[-8.26, -0.38]
+  SSIM改进: 平均-0.0877, 中位数-0.0368
+  LPIPS改进: 平均-0.0699, 中位数-0.0493
+
+================================================================================
+2. 按样本分析（每个样本的最佳工具）
+================================================================================
+
+样本: sample_0
+  退化类型: low resolution
+  退化图基线: PSNR=41.66dB, SSIM=0.9963, LPIPS=0.0067
+  最佳工具: restormer_motion_deblurring (PSNR改进 -2.48dB)
+  最差工具: mprnet_denoising (PSNR改进 -16.26dB)
+
+样本: sample_3
+  退化类型: low resolution
+  退化图基线: PSNR=46.87dB, SSIM=0.9983, LPIPS=0.0029
+  最佳工具: restormer_motion_deblurring (PSNR改进 -0.43dB)
+  最差工具: mprnet_denoising (PSNR改进 -14.57dB)
+
+样本: sample_1
+  退化类型: jpeg compression artifact
+  退化图基线: PSNR=27.23dB, SSIM=0.8514, LPIPS=0.2643
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 +2.62dB)
+  最差工具: restormer_motion_deblurring (PSNR改进 -3.39dB)
+
+样本: sample_2
+  退化类型: dark
+  退化图基线: PSNR=20.79dB, SSIM=0.8921, LPIPS=0.0600
+  最佳工具: mprnet_denoising (PSNR改进 +0.16dB)
+  最差工具: restormer_motion_deblurring (PSNR改进 -0.38dB)
+
+样本: sample_4
+  退化类型: motion blur
+  退化图基线: PSNR=20.24dB, SSIM=0.6537, LPIPS=0.3830
+  最佳工具: fbcnn_jpeg_artifact_removal (PSNR改进 -0.03dB)
+  最差工具: restormer_motion_deblurring (PSNR改进 -8.26dB)
+
+样本: sample_5
+  退化类型: noise
+  退化图基线: PSNR=21.23dB, SSIM=0.2150, LPIPS=0.7326
+  最佳工具: mprnet_denoising (PSNR改进 +11.77dB)
+  最差工具: restormer_motion_deblurring (PSNR改进 -2.28dB)
+
+================================================================================
+3. 工具针对性分析（对口 vs 不对口）
+================================================================================
+
+工具: mprnet_denoising
+  针对退化: noise
+  对口样本: 1个, 平均PSNR改进 +11.77dB
+  非对口样本: 5个, 平均PSNR改进 -6.07dB
+  针对性差异: +17.85dB (✅ 工具有很强的针对性)
+
+工具: restormer_motion_deblurring
+  针对退化: motion blur
+  对口样本: 1个, 平均PSNR改进 -8.26dB
+  非对口样本: 5个, 平均PSNR改进 -1.79dB
+  针对性差异: -6.46dB (⚠️ 工具针对性不强)
+
+工具: fbcnn_jpeg_artifact_removal
+  针对退化: jpeg compression artifact
+  对口样本: 1个, 平均PSNR改进 +2.62dB
+  非对口样本: 5个, 平均PSNR改进 -2.35dB
+  针对性差异: +4.97dB (✅ 工具有很强的针对性)
+
+================================================================================
+4. 按退化类型的详细分析
+================================================================================
+
+退化类型: low resolution
+  样本数: 2
+  退化图基线: PSNR=41.66dB, SSIM=0.9963, LPIPS=0.0067
+  最佳工具TOP5:
+    1. restormer_motion_deblurring: PSNR -1.46dB, SSIM -0.0012, LPIPS +0.0004
+    2. fbcnn_jpeg_artifact_removal: PSNR -7.08dB, SSIM -0.0135, LPIPS -0.0060
+    3. mprnet_denoising: PSNR -15.41dB, SSIM -0.1133, LPIPS -0.1516
+
+退化类型: jpeg compression artifact
+  样本数: 1
+  退化图基线: PSNR=27.23dB, SSIM=0.8514, LPIPS=0.2643
+  最佳工具TOP5:
+    1. fbcnn_jpeg_artifact_removal: PSNR +2.62dB, SSIM +0.0638, LPIPS +0.1065
+    2. mprnet_denoising: PSNR +0.41dB, SSIM +0.0204, LPIPS +0.0356
+    3. restormer_motion_deblurring: PSNR -3.39dB, SSIM -0.0382, LPIPS -0.0331
+
+退化类型: dark
+  样本数: 1
+  退化图基线: PSNR=20.79dB, SSIM=0.8921, LPIPS=0.0600
+  最佳工具TOP5:
+    1. mprnet_denoising: PSNR +0.16dB, SSIM -0.0634, LPIPS -0.2142
+    2. fbcnn_jpeg_artifact_removal: PSNR +0.01dB, SSIM -0.0129, LPIPS -0.0106
+    3. restormer_motion_deblurring: PSNR -0.38dB, SSIM -0.0472, LPIPS -0.0656
+
+退化类型: motion blur
+  样本数: 1
+  退化图基线: PSNR=20.24dB, SSIM=0.6537, LPIPS=0.3830
+  最佳工具TOP5:
+    1. fbcnn_jpeg_artifact_removal: PSNR -0.03dB, SSIM -0.0072, LPIPS -0.0189
+    2. mprnet_denoising: PSNR -0.12dB, SSIM -0.0223, LPIPS -0.0688
+    3. restormer_motion_deblurring: PSNR -8.26dB, SSIM -0.4029, LPIPS -0.2065
+
+退化类型: noise
+  样本数: 1
+  退化图基线: PSNR=21.23dB, SSIM=0.2150, LPIPS=0.7326
+  最佳工具TOP5:
+    1. mprnet_denoising: PSNR +11.77dB, SSIM +0.7160, LPIPS +0.5228
+    2. fbcnn_jpeg_artifact_removal: PSNR +2.45dB, SSIM +0.0933, LPIPS -0.0504
+    3. restormer_motion_deblurring: PSNR -2.28dB, SSIM -0.0355, LPIPS -0.1150
+
