@@ -13,12 +13,12 @@ export TOOL_SERVICE_IP=${TOOL_SERVICE_IP:-"10.21.9.6"}
 export PYTHONPATH=/app/xiaominl/DeepEyes_v2:$PYTHONPATH
 
 # 数据集路径
-DATA_PATH=${DATA_PATH:-"/app/xiaominl/datasets/air_sp11np_up3_sample1_nosw/shard-test-000000.parquet"}
+DATA_PATH=${DATA_PATH:-"/app/xiaominl/datasets/air_sp12_up3_samole1_rand/shard-test-000000.parquet"}
 
 # 获取总样本数
 TOTAL_SAMPLES=$(python3 << 'EOF'
 import pandas as pd
-df = pd.read_parquet('/app/xiaominl/datasets/air_sp11np_up3_sample1_nosw/shard-test-000000.parquet')
+df = pd.read_parquet('/app/xiaominl/datasets/air_sp12_up3_samole1_rand/shard-test-000000.parquet')
 print(len(df))
 EOF
 )
