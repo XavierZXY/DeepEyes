@@ -186,11 +186,25 @@ def compute_agent_metrics(batch: DataProto):
         return {}
 
     tool_cnt_tensor = batch.batch.pop('tool_cnt').detach().cpu()
-    return {
+    metrics = {
         "agent/tool_call_mean": torch.mean(tool_cnt_tensor).item(),
         "agent/tool_call_max": torch.max(tool_cnt_tensor).item(),
         "agent/tool_call_min": torch.min(tool_cnt_tensor).item(),
     }
+    
+    # 收集工具-退化匹配统计（如果存在）
+    # 这些指标以 tool_match/ 开头
+    tool_match_keys = [key for key in batch.batch.keys() if key.startswith('tool_match/')]
+    
+    for key in tool_match_keys:
+        tensor = batch.batch.pop(key).detach().cpu()
+        # 由于所有样本的值都相同（全局统计），取第一个即可
+        metrics[key] = tensor[0, 0].item() if tensor.numel() > 0 else 0.0
+    
+    if tool_match_keys:
+        print(f"[METRICS] 收集了 {len(tool_match_keys)} 个工具-退化匹配指标")
+    
+    return metrics
 
 
 def bootstrap_metric(

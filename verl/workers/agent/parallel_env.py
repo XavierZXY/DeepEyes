@@ -283,9 +283,164 @@ def _preprocess_multi_modal_inputs(prompt_str, processor, **kwargs):
     return vllm_input_prompt, input_ids, mm_inputs
 
 
+def compute_tool_degradation_matching_stats(
+    tool_calls_per_sample, 
+    degradation_types_per_sample, 
+    degradation_to_tools,
+    conversation_mode,
+    all_degradation_types
+):
+    """
+    计算工具-退化类型匹配统计
+    
+    Args:
+        tool_calls_per_sample: List[Dict[int, List[str]]]，每个样本的每轮调用的工具
+        degradation_types_per_sample: List[List[str]]，每个样本的真实退化类型
+        degradation_to_tools: Dict[str, List[str]]，退化类型到工具的映射
+        conversation_mode: str，对话模式
+        all_degradation_types: List[str]，所有退化类型
+        
+    Returns:
+        dict: 包含重复和不重复两种统计的字典
+    """
+    from collections import defaultdict
+    
+    # 初始化统计计数器
+    # 重复统计：统计工具调用总次数
+    degradation_tool_count_repeat = defaultdict(int)  # 每种退化对应的工具被调用次数（重复计数）
+    degradation_total_count = defaultdict(int)  # 每种退化类型出现的总次数
+    
+    # 不重复统计：每个样本只统计一次
+    degradation_sample_matched_unique = defaultdict(int)  # 每种退化有多少样本调用了对应工具（不重复）
+    degradation_sample_total_unique = defaultdict(int)  # 每种退化在多少个样本中出现
+    
+    num_samples = len(tool_calls_per_sample)
+    
+    print(f"[TOOL STATS] 统计模式: {conversation_mode}")
+    print(f"[TOOL STATS] 样本数量: {num_samples}")
+    
+    for idx in range(num_samples):
+        tool_calls_dict = tool_calls_per_sample[idx]  # {turn: [tools]}
+        degradation_types = degradation_types_per_sample[idx]  # [deg1, deg2, ...]
+        
+        if not degradation_types:
+            # clean样本或没有退化信息，跳过
+            continue
+        
+        # 决定使用哪些轮次的工具调用
+        if conversation_mode == 'multi_tool_planning':
+            # 多工具模式：只使用最后一轮
+            if tool_calls_dict:
+                max_turn = max(tool_calls_dict.keys())
+                tools_to_use = tool_calls_dict.get(max_turn, [])
+            else:
+                tools_to_use = []
+        else:
+            # 单工具模式：使用所有轮次
+            tools_to_use = []
+            for turn in sorted(tool_calls_dict.keys()):
+                tools_to_use.extend(tool_calls_dict[turn])
+        
+        # 统计每种退化类型
+        for deg_type in degradation_types:
+            # 增加该退化类型的总计数
+            degradation_total_count[deg_type] += 1
+            degradation_sample_total_unique[deg_type] += 1
+            
+            # 获取该退化类型对应的工具列表
+            correct_tools = degradation_to_tools.get(deg_type, [])
+            
+            if not correct_tools:
+                print(f"[TOOL STATS WARNING] 退化类型 '{deg_type}' 没有对应的工具映射")
+                continue
+            
+            # 检查是否调用了对应的工具
+            sample_matched = False  # 该样本是否匹配（用于不重复统计）
+            
+            for tool_name in tools_to_use:
+                if tool_name in correct_tools:
+                    # 重复统计：每次调用都计数
+                    degradation_tool_count_repeat[deg_type] += 1
+                    sample_matched = True
+            
+            # 不重复统计：样本级别只计数一次
+            if sample_matched:
+                degradation_sample_matched_unique[deg_type] += 1
+    
+    # 计算匹配率
+    results = {}
+    
+    print(f"\n[TOOL STATS] === 工具-退化匹配统计 ===")
+    print(f"[TOOL STATS] 重复统计（工具调用次数级别）:")
+    for deg_type in all_degradation_types:
+        if deg_type == 'clean':
+            continue
+        
+        total = degradation_total_count[deg_type]
+        matched = degradation_tool_count_repeat[deg_type]
+        
+        if total > 0:
+            ratio_repeat = matched / total
+            results[f'tool_match/{deg_type}_repeat_ratio'] = ratio_repeat
+            results[f'tool_match/{deg_type}_repeat_count'] = float(matched)
+            results[f'tool_match/{deg_type}_total_count'] = float(total)
+            print(f"[TOOL STATS]   {deg_type}: {matched}/{total} = {ratio_repeat:.3f}")
+        else:
+            results[f'tool_match/{deg_type}_repeat_ratio'] = 0.0
+            results[f'tool_match/{deg_type}_repeat_count'] = 0.0
+            results[f'tool_match/{deg_type}_total_count'] = 0.0
+    
+    print(f"\n[TOOL STATS] 不重复统计（样本级别）:")
+    for deg_type in all_degradation_types:
+        if deg_type == 'clean':
+            continue
+        
+        total_samples = degradation_sample_total_unique[deg_type]
+        matched_samples = degradation_sample_matched_unique[deg_type]
+        
+        if total_samples > 0:
+            ratio_unique = matched_samples / total_samples
+            results[f'tool_match/{deg_type}_unique_ratio'] = ratio_unique
+            results[f'tool_match/{deg_type}_unique_matched'] = float(matched_samples)
+            results[f'tool_match/{deg_type}_unique_total'] = float(total_samples)
+            print(f"[TOOL STATS]   {deg_type}: {matched_samples}/{total_samples} = {ratio_unique:.3f}")
+        else:
+            results[f'tool_match/{deg_type}_unique_ratio'] = 0.0
+            results[f'tool_match/{deg_type}_unique_matched'] = 0.0
+            results[f'tool_match/{deg_type}_unique_total'] = 0.0
+    
+    print(f"[TOOL STATS] === 统计完成 ===\n")
+    
+    return results
+
+
 def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_inputs, sampling_params):
     from vllm.distributed import parallel_state as vllm_ps
+    import os
 
+    # 读取对话模式配置
+    conversation_mode = os.environ.get('AGENT_CONVERSATION_MODE', 'multi_tool_planning')
+    print(f"[AGENT MODE] 对话模式: {conversation_mode}")
+    
+    if conversation_mode not in ['multi_tool_planning', 'single_tool_iterative']:
+        print(f"[AGENT MODE WARNING] 未知模式 '{conversation_mode}'，使用默认模式 'multi_tool_planning'")
+        conversation_mode = 'multi_tool_planning'
+    
+    # 定义退化类型到工具的映射关系
+    DEGRADATION_TO_TOOLS = {
+        'rain': ['mprnet_deraining', 'restormer_deraining', 'xrestormer_deraining'],
+        'haze': ['dehazeformer_dehaze'],
+        'dark': ['retinexformer_enhance', 'retinexformer_lol_v1', 'retinexformer_lol_v2_real', 
+                'retinexformer_lol_v2_synthetic', 'retinexformer_sdsd_indoor', 'retinexformer_sdsd_outdoor',
+                'retinexformer_sid', 'retinexformer_smid', 'retinexformer_fivek'],
+        'motion blur': ['xrestormer_motion_deblurring', 'mprnet_motion_deblurring', 'restormer_motion_deblurring'],
+        'defocus blur': ['drbnet_defocus_deblurring', 'restormer_defocus_deblurring'],
+        'noise': ['swinir_denoising', 'mprnet_denoising', 'scunet_real_denoising_psnr', 'scunet_real_denoising_gan',
+                 'scunet_color_denoising', 'scunet_gray_denoising'],
+        'low resolution': ['swinir_super_resolution'],
+        'jpeg compression artifact': ['swinir_jpeg_artifact_removal', 'fbcnn_jpeg_artifact_removal'],
+    }
+    
     agent_sampling_params = sampling_params.clone()
     agent_sampling_params.detokenize = True
     agent_sampling_params.skip_special_tokens = False
@@ -339,6 +494,11 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
     degradation_labels_list = []  # 退化类型列表
     repeated_degradation_cnt_list = []  # 连续重复退化数量
     
+    # 工具调用统计（用于计算工具-退化匹配率）
+    # 格式：每个样本记录 {turn: [tool_names]}
+    tool_calls_per_sample = []  # List[Dict[int, List[str]]]，每个样本的每轮调用的工具列表
+    degradation_types_per_sample = []  # List[List[str]]，每个样本的真实退化类型列表
+    
     # 每种退化类型的连续出现统计
     all_degradation_types = ["rain", "haze", "dark", "motion blur", "defocus blur", "noise", "low resolution", "jpeg compression artifact", "clean"]
     consecutive_degradation_stats = {}
@@ -346,7 +506,7 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
     for deg_type in all_degradation_types:
         consecutive_degradation_stats[deg_type] = []  # 每个样本的连续次数
 
-    env = ParallelEnv(config.agent, tokenizer, processor)
+    env = ParallelEnv(config.agent, tokenizer, processor, conversation_mode=conversation_mode)
     env.reset(prompts, vllm_inputs, n=sampling_params.n)
 
     # interleaving inputs if sampling_params.n > 1
@@ -373,6 +533,10 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
             for deg_type in all_degradation_types:
                 consecutive_degradation_stats[deg_type].append(0)
             last_round_degradations.append(set())  # 初始化为空集合
+            
+            # 初始化工具调用统计
+            tool_calls_per_sample.append({})  # 每个样本的工具调用记录 {turn: [tools]}
+            degradation_types_per_sample.append([])  # 每个样本的真实退化类型
 
     pg = vllm_ps.get_tp_group()
     max_total_length = config.prompt_length + config.response_length
@@ -420,6 +584,16 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
             # 收集统计信息 - 解析当前动作
             action_text = act.outputs[0].text
             parsed_action = _parse_model_output_for_tools(action_text, f"统计-轮次{step + 1}")
+            
+            # 收集工具调用信息（用于统计工具-退化匹配率）
+            if parsed_action.get('tool_calls'):
+                tool_names = []
+                for tool_call in parsed_action['tool_calls']:
+                    if isinstance(tool_call, dict) and 'name' in tool_call:
+                        tool_names.append(tool_call['name'])
+                if tool_names:
+                    tool_calls_per_sample[idx][step + 1] = tool_names
+                    print(f"[TOOL STATS] 样本{idx} 轮次{step + 1}: 调用工具 {tool_names}")
             
             # 保存对话历史（用于wandb可视化）
             if hasattr(env, 'conversation_history') and idx < len(env.conversation_history):
@@ -628,6 +802,50 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
             if running_states[idx].shape[-1] >= max_total_length or len(vllm_input_list[idx]['prompt_token_ids']) >= max_total_length:
                 active_mask[idx] = False
 
+    # 提取真实退化类型（从prompts的reward_model或env_name）
+    # 参考：verl/utils/reward_score/image_restoration.py 的 parse_reward_model_to_degradations_v2 和 parse_env_name_to_degradations_v2
+    print(f"[TOOL STATS] 开始提取真实退化类型...")
+    for i in range(batch_size):
+        data_item = prompts[i]
+        # 获取reward_model和env_name
+        reward_model = data_item.non_tensor_batch.get("reward_model", [])
+        env_name = data_item.non_tensor_batch.get("env_name", "")
+        
+        # 提取退化类型（优先使用reward_model，与现有代码逻辑一致）
+        degradation_types = []
+        
+        # 方法1：从reward_model提取（优先）
+        if reward_model and isinstance(reward_model, list) and len(reward_model) > 0:
+            for item in reward_model:
+                if isinstance(item, dict) and 'degradation_type' in item:  # 注意：字段名是 'degradation_type' 不是 'type'
+                    deg_type = item['degradation_type']
+                    if deg_type is not None and str(deg_type).strip() and str(deg_type).strip().lower() != 'clean':
+                        degradation_types.append(str(deg_type).strip())
+        
+        # 方法2：从env_name提取（备用）
+        if not degradation_types and env_name and env_name.strip().lower() != "clean":
+            # env_name格式：逆序，逗号分隔，例如 "noise, haze, rain" 表示先加rain，再haze，最后noise
+            parts = [p.strip() for p in env_name.split(',') if p.strip()]
+            # 逆序后就是添加顺序（与reward_model一致）
+            degradation_types = list(reversed(parts))
+        
+        # 为每个重复的样本复制退化类型
+        for _ in range(sampling_params.n):
+            idx = i * sampling_params.n + _
+            degradation_types_per_sample[idx] = degradation_types
+            if i < 3:  # 只打印前3个样本，避免日志过多
+                print(f"[TOOL STATS] 样本{idx}: 真实退化类型 {degradation_types} (来源: {'reward_model' if reward_model else 'env_name'})")
+    
+    # 计算工具-退化匹配统计
+    print(f"[TOOL STATS] 开始计算工具-退化匹配统计...")
+    tool_degradation_stats = compute_tool_degradation_matching_stats(
+        tool_calls_per_sample=tool_calls_per_sample,
+        degradation_types_per_sample=degradation_types_per_sample,
+        degradation_to_tools=DEGRADATION_TO_TOOLS,
+        conversation_mode=conversation_mode,
+        all_degradation_types=all_degradation_types
+    )
+    
     # Save image_history_list, original_images, extra_info, and conversation_history BEFORE closing env (env.close() will clear it)
     saved_image_history_list = env.multi_modal_data_history_list.copy() if hasattr(env, 'multi_modal_data_history_list') else []
     saved_original_images = env.origin_multi_modal_data_list.copy() if hasattr(env, 'origin_multi_modal_data_list') else []
@@ -686,6 +904,17 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
         degradation_stats[f"degradation_{deg_type.replace(' ', '_')}_consecutive"] = torch.tensor(consecutive_list, dtype=torch.float32).to(target_device).unsqueeze(1)
     
     repeated_degradation_tensor = torch.tensor(repeated_degradation_cnt_list, dtype=torch.float32).to(target_device).unsqueeze(1)
+    
+    # 将工具-退化匹配统计转换为tensor（每个样本都一样的全局统计）
+    tool_match_tensors = {}
+    for key, value in tool_degradation_stats.items():
+        # 创建一个所有样本值都相同的tensor
+        tool_match_tensors[key] = torch.full(
+            (batch_size * sampling_params.n, 1), 
+            value, 
+            dtype=torch.float32,
+            device=target_device
+        )
     
     # 打印详细统计摘要
     print(f"\n[STATS SUMMARY] === 退化类型统计详情 ===")
@@ -869,12 +1098,13 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
             "final_answer": final_answer_tensor,
             "repeated_degradation_cnt": repeated_degradation_tensor,
             **degradation_stats,
+            **tool_match_tensors,  # 添加工具-退化匹配统计
         },
         non_tensors=non_tensors_dict
     )
 
 
-def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None):
+def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None, conversation_mode='multi_tool_planning'):
     action_string = sample.get('action', '')
     tools = sample.get('tools', [])
     parsed_output = sample.get('parsed_output', {})
@@ -926,7 +1156,7 @@ def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None):
             else:
                 compatible_action_string = f"<tool_call>{json.dumps({'name': str(tool_call), 'arguments': {}})}</tool_call>"
             # print(f'[DEBUG {turn_info}] ', compatible_action_string)
-            print(f'[DEBUG {turn_info}] 执行工具: {tool.name}')
+            print(f'[DEBUG {turn_info}] 执行工具{i+1}/{len(tools)}: {tool.name}')
             tool_result, reward, done, info = tool.execute(compatible_action_string)
             print(f'[DEBUG {turn_info}] 结果: multi_modal_data={tool_result.get("multi_modal_data") is not None}, reward={reward:.3f}, done={done}')
             print(f'[DEBUG {turn_info}] 状态: {info.get("status", "unknown")}')
@@ -938,7 +1168,26 @@ def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None):
             final_done = final_done or done
             final_info.update(info)
             
+            # 【关键修改】多工具链式规划模式：将当前工具的输出图像传递给下一个工具
+            if conversation_mode == 'multi_tool_planning' and i < len(tools) - 1:
+                # 有下一个工具，且当前工具产生了图像输出
+                if final_tool_result and isinstance(final_tool_result, dict) and 'multi_modal_data' in final_tool_result:
+                    next_tool = tools[i + 1]
+                    if next_tool is not None:
+                        # 更新下一个工具的输入图像
+                        try:
+                            # 使用 reset 方法更新工具的输入图像
+                            next_tool.reset(
+                                raw_prompt=next_tool.raw_prompt if hasattr(next_tool, 'raw_prompt') else None,
+                                multi_modal_data=deepcopy(final_tool_result['multi_modal_data']),
+                                origin_multi_modal_data=next_tool.origin_multi_modal_data if hasattr(next_tool, 'origin_multi_modal_data') else None,
+                            )
+                            print(f'[DEBUG {turn_info}] 链式传递: 工具{i+1}的输出 → 工具{i+2}的输入')
+                        except Exception as reset_error:
+                            print(f'[WARNING {turn_info}] 更新工具{i+2}输入图像失败: {reset_error}')
+            
         except Exception as e:
+            print(f'[ERROR {turn_info}] 工具{i+1}执行异常: {e}')
             total_reward -= 0.1
             continue
 
@@ -1017,10 +1266,11 @@ class ParallelEnv:
     """
     The interface is designed to be the similar to : https://github.com/openai/gym
     """
-    def __init__(self, env_config, tokenizer, processor, **kwargs):
+    def __init__(self, env_config, tokenizer, processor, conversation_mode='multi_tool_planning', **kwargs):
         self.config = env_config
         self.tokenizer = tokenizer
         self.processor = processor
+        self.conversation_mode = conversation_mode  # 对话模式：multi_tool_planning 或 single_tool_iterative
 
         # type: List[ Dict[ Str, ToolBase subclasses ] ]
         self.tools = []
@@ -1089,12 +1339,27 @@ class ParallelEnv:
             # 创建工具实例
             tools = []
             if parsed_output['tool_calls']:
+                # 【单工具模式验证】确保每轮只调用一个工具
+                if self.conversation_mode == 'single_tool_iterative' and len(parsed_output['tool_calls']) > 1:
+                    print(f'[FORMAT ERROR {turn_info}] 单工具迭代模式下，每轮只能调用一个工具，但检测到{len(parsed_output['tool_calls'])}个工具调用')
+                    # 可以选择只使用第一个工具，或者返回错误
+                    # 这里选择只使用第一个工具，并给出警告
+                    parsed_output['tool_calls'] = [parsed_output['tool_calls'][0]]
+                
                 # 获取最新的图像数据（历史列表的最后一个元素）
                 current_multi_modal_data = (
                     self.multi_modal_data_history_list[idx][-1] 
                     if self.multi_modal_data_history_list[idx] 
                     else None
                 )
+                
+                # 调试：显示使用的是哪个图像
+                history_len = len(self.multi_modal_data_history_list[idx]) if self.multi_modal_data_history_list[idx] else 0
+                if self.conversation_mode == 'single_tool_iterative':
+                    print(f'[DEBUG {turn_info}] 🔄 单工具模式: 使用历史图像[{history_len-1}] (共{history_len}张图像)')
+                elif len(parsed_output['tool_calls']) > 1:
+                    print(f'[DEBUG {turn_info}] 🔗 多工具模式: 使用历史图像[{history_len-1}], 将链式执行{len(parsed_output["tool_calls"])}个工具')
+                
                 tools = _create_tools_from_parsed_output(
                     parsed_output,
                     multi_modal_data=current_multi_modal_data,
@@ -1112,7 +1377,8 @@ class ParallelEnv:
                         tool_names.append('格式错误')
                 
                 success_count = sum(1 for t in tools if t is not None)
-                # print(f'[DEBUG step {current_turn}-{idx:02d}] 工具: {success_count}/{len(tools)}个成功 [{", ".join(tool_names)}]')
+                mode_indicator = "🔗" if self.conversation_mode == 'multi_tool_planning' else "🔄"
+                # print(f'[DEBUG step {current_turn}-{idx:02d}] {mode_indicator} 工具: {success_count}/{len(tools)}个成功 [{", ".join(tool_names)}]')
                 
             # elif has_answer:
             #     print(f'[DEBUG step {current_turn}-{idx:02d}] 答案: 任务完成')
@@ -1137,7 +1403,7 @@ class ParallelEnv:
                 valid_idx = agi['valid_idx']
                 subidx = agi['idx']
                 
-                obs, reward, done, info = execute_tool_call(agi, self.tokenizer, self.processor, pbar=pbar)
+                obs, reward, done, info = execute_tool_call(agi, self.tokenizer, self.processor, pbar=pbar, conversation_mode=self.conversation_mode)
                 
                 # 输出执行结果
                 if info.get('status') == 'success':
@@ -1147,7 +1413,10 @@ class ParallelEnv:
                         status = "✅"  # 工具执行成功
                         # 更新环境中的图像数据
                         if isinstance(obs, dict) and 'multi_modal_data' in obs:
+                            old_len = len(self.multi_modal_data_history_list[valid_idx])
                             self.multi_modal_data_history_list[valid_idx].append(deepcopy(obs['multi_modal_data']))
+                            new_len = len(self.multi_modal_data_history_list[valid_idx])
+                            print(f'[DEBUG {turn_info}] 📸 更新图像历史: {old_len} → {new_len}张 (新增工具输出图像)')
                 else:
                     status = "❌"  # 执行失败
                 
@@ -1155,7 +1424,7 @@ class ParallelEnv:
                 reward_list[subidx] = reward
                 done_list[subidx] |= done
         else:
-            partial_tool_func = partial(execute_tool_call, tokenizer=self.tokenizer, processor=self.processor, pbar=pbar)
+            partial_tool_func = partial(execute_tool_call, tokenizer=self.tokenizer, processor=self.processor, pbar=pbar, conversation_mode=self.conversation_mode)
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
                 raw_outputs = list(executor.map(partial_tool_func, agent_inputs))
             for agi, raw in zip(agent_inputs, raw_outputs):
@@ -1170,7 +1439,10 @@ class ParallelEnv:
                         status = "✅"  # 工具执行成功
                         # 更新环境中的图像数据
                         if isinstance(obs, dict) and 'multi_modal_data' in obs:
+                            old_len = len(self.multi_modal_data_history_list[valid_idx])
                             self.multi_modal_data_history_list[valid_idx].append(deepcopy(obs['multi_modal_data']))
+                            new_len = len(self.multi_modal_data_history_list[valid_idx])
+                            print(f'[DEBUG 并行-样本{valid_idx}] 📸 更新图像历史: {old_len} → {new_len}张')
                 else:
                     status = "❌"  # 执行失败
                 print(f'[DEBUG step {current_turn}-{valid_idx:02d}] 执行: {status} reward={reward:.3f}, done={done}')
