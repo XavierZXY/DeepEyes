@@ -1246,15 +1246,23 @@ def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None, convers
             prompt_str = tokenizer.apply_chat_template(chat_list, add_generation_prompt=True, tokenize=False)
             prompt_str = _strip_system_block(prompt_str)
 
+        # 🔥 关键修复：保存原始PIL图像（用于reward计算）
+        # _preprocess_multi_modal_inputs会修改multi_modal_data（调用process_image/fetch_image）
+        # 所以先deepcopy保存原始数据
+        original_multi_modal_data_for_reward = deepcopy(final_tool_result.get("multi_modal_data", {}))
+
         prompt_str_vllm, obs_token_ids_model, mm_inputs = _preprocess_multi_modal_inputs(prompt_str, processor, **final_tool_result)
         obs_token_ids_vllm = tokenizer.encode(prompt_str_vllm, add_special_tokens=False, return_tensors='pt')[0]
         tool_result_info = {
             "prompt_token_ids_vllm": obs_token_ids_vllm,
             "prompt_token_ids_model": obs_token_ids_model,
-            **final_tool_result   # multi_modal_data
+            **final_tool_result   # multi_modal_data（已被fetch_image处理，用于VLLM）
         }
         if mm_inputs:
             tool_result_info["multi_modal_inputs"] = mm_inputs
+        
+        # 🔥 关键：添加原始multi_modal_data用于reward计算
+        tool_result_info["multi_modal_data_for_reward"] = original_multi_modal_data_for_reward
 
     else:
         raise ValueError(f"Invalid tool_result type: {type(final_tool_result)=} -- {final_tool_result}")
@@ -1414,11 +1422,20 @@ class ParallelEnv:
                     else:
                         status = "✅"  # 工具执行成功
                         # 更新环境中的图像数据
-                        if isinstance(obs, dict) and 'multi_modal_data' in obs:
-                            old_len = len(self.multi_modal_data_history_list[valid_idx])
-                            self.multi_modal_data_history_list[valid_idx].append(deepcopy(obs['multi_modal_data']))
-                            new_len = len(self.multi_modal_data_history_list[valid_idx])
-                            print(f'[DEBUG {turn_info}] 📸 更新图像历史: {old_len} → {new_len}张 (新增工具输出图像)')
+                        # 🔥 优先使用原始PIL图像（用于reward计算），而不是fetch后的
+                        if isinstance(obs, dict):
+                            if 'multi_modal_data_for_reward' in obs:
+                                # 使用原始PIL图像（工具直接输出，未经fetch_image）
+                                old_len = len(self.multi_modal_data_history_list[valid_idx])
+                                self.multi_modal_data_history_list[valid_idx].append(deepcopy(obs['multi_modal_data_for_reward']))
+                                new_len = len(self.multi_modal_data_history_list[valid_idx])
+                                print(f'[DEBUG {turn_info}] 📸 更新图像历史(原始PIL): {old_len} → {new_len}张')
+                            elif 'multi_modal_data' in obs:
+                                # Fallback: 使用fetch后的（兼容旧逻辑）
+                                old_len = len(self.multi_modal_data_history_list[valid_idx])
+                                self.multi_modal_data_history_list[valid_idx].append(deepcopy(obs['multi_modal_data']))
+                                new_len = len(self.multi_modal_data_history_list[valid_idx])
+                                print(f'[DEBUG {turn_info}] ⚠️  更新图像历史(fetch后,fallback): {old_len} → {new_len}张')
                 else:
                     status = "❌"  # 执行失败
                 
@@ -1440,11 +1457,20 @@ class ParallelEnv:
                     else:
                         status = "✅"  # 工具执行成功
                         # 更新环境中的图像数据
-                        if isinstance(obs, dict) and 'multi_modal_data' in obs:
-                            old_len = len(self.multi_modal_data_history_list[valid_idx])
-                            self.multi_modal_data_history_list[valid_idx].append(deepcopy(obs['multi_modal_data']))
-                            new_len = len(self.multi_modal_data_history_list[valid_idx])
-                            print(f'[DEBUG 并行-样本{valid_idx}] 📸 更新图像历史: {old_len} → {new_len}张')
+                        # 🔥 优先使用原始PIL图像（用于reward计算），而不是fetch后的
+                        if isinstance(obs, dict):
+                            if 'multi_modal_data_for_reward' in obs:
+                                # 使用原始PIL图像（工具直接输出，未经fetch_image）
+                                old_len = len(self.multi_modal_data_history_list[valid_idx])
+                                self.multi_modal_data_history_list[valid_idx].append(deepcopy(obs['multi_modal_data_for_reward']))
+                                new_len = len(self.multi_modal_data_history_list[valid_idx])
+                                print(f'[DEBUG 并行-样本{valid_idx}] 📸 更新图像历史(原始PIL): {old_len} → {new_len}张')
+                            elif 'multi_modal_data' in obs:
+                                # Fallback: 使用fetch后的（兼容旧逻辑）
+                                old_len = len(self.multi_modal_data_history_list[valid_idx])
+                                self.multi_modal_data_history_list[valid_idx].append(deepcopy(obs['multi_modal_data']))
+                                new_len = len(self.multi_modal_data_history_list[valid_idx])
+                                print(f'[DEBUG 并行-样本{valid_idx}] ⚠️  更新图像历史(fetch后,fallback): {old_len} → {new_len}张')
                 else:
                     status = "❌"  # 执行失败
                 print(f'[DEBUG step {current_turn}-{valid_idx:02d}] 执行: {status} reward={reward:.3f}, done={done}')
