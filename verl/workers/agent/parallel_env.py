@@ -1041,15 +1041,17 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
                 non_tensors_dict["original_images"] = orig_img_array
                 print(f"[DEBUG IMAGE_HISTORY] ✓ Added all fields (original_images padded: {len(original_images_to_add)}/{expected_size})")
             
-            # 添加extra_info（需要interleave以匹配sampling.n）
+            # 添加extra_info
+            # 🔥 关键修复：extra_info应该和image_history_list使用相同的索引逻辑！
+            # saved_extra_info_list已经在reset中interleaved了（每个原始样本重复n次）
+            # 所以和image_history_list长度相同，直接对应即可
             if saved_extra_info_list:
                 extra_info_array = np.empty(expected_size, dtype=object)
                 for i in range(expected_size):
-                    # Interleave: 每个样本重复n次
-                    orig_idx = i // sampling_params.n if sampling_params.n > 1 else i
-                    extra_info_array[i] = saved_extra_info_list[orig_idx] if orig_idx < len(saved_extra_info_list) else None
+                    # 🔥 直接使用i索引（与image_history_list一致，不再使用orig_idx）
+                    extra_info_array[i] = saved_extra_info_list[i] if i < len(saved_extra_info_list) else None
                 non_tensors_dict["extra_info"] = extra_info_array
-                print(f"[DEBUG EXTRA_INFO] ✓ Added extra_info (interleaved): {len(saved_extra_info_list)} -> {expected_size}")
+                print(f"[DEBUG EXTRA_INFO] ✓ Added extra_info (直接对应): {len(saved_extra_info_list)} -> {expected_size}")
             else:
                 # 如果没有extra_info，添加None数组
                 extra_info_array = np.empty(expected_size, dtype=object)
@@ -1479,8 +1481,9 @@ class ParallelEnv:
             for _ in range(n):
                 # Store context data for later tool creation
                 self.raw_prompts.append(raw_prompt)
-                # 初始化图像历史，第一个元素是原始图像
-                image_history = [deepcopy(multi_modal_data)] if multi_modal_data else []
+                # 🔥 关键修复：初始化图像历史时使用origin_multi_modal_data（原始PIL，未fetch）
+                # 不应该使用multi_modal_data（已经fetch_image处理过，可能padding）
+                image_history = [deepcopy(origin_multi_modal_data)] if origin_multi_modal_data else []
                 self.multi_modal_data_history_list.append(image_history)
                 self.origin_multi_modal_data_list.append(deepcopy(origin_multi_modal_data))
                 

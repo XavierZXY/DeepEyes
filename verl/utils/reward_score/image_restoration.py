@@ -886,15 +886,10 @@ def compute_image_quality_reward_v2(solution_str: str, extra_info: Dict = None,
             print(f"[DEBUG] 复原图格式未知: {type(restored_image_raw)}")
             return return_negative_quality_result(f"Unsupported restored image format: {type(restored_image_raw)}")
         
-        # 对复原图应用fetch_image处理（与原图对齐维度）
-        try:
-            from qwen_vl_utils import fetch_image
-            restored_dict = {"image": restored_image_pil}
-            restored_image = fetch_image(restored_dict)
-            print(f"[DEBUG] 复原图经fetch_image后尺寸: {restored_image.size}")
-        except Exception as e:
-            print(f"[DEBUG] 复原图fetch_image失败，使用PIL图像: {e}")
-            restored_image = restored_image_pil
+        # 直接使用PIL图像，不做fetch_image处理
+        # （fetch_image是为vision transformer准备的，reward计算不需要）
+        restored_image = restored_image_pil
+        print(f"[DEBUG] 复原图尺寸（直接使用PIL）: {restored_image.size}")
         
         if use_no_reference:
             # 使用无参考指标计算图像质量奖励
@@ -945,43 +940,18 @@ def compute_image_quality_reward_v2(solution_str: str, extra_info: Dict = None,
                     print(f"[DEBUG] 原图格式未知: {type(original_image_data)}")
                     return return_negative_quality_result(f"Unsupported original image format: {type(original_image_data)}")
             
-            # 对原图也应用fetch_image预处理，确保与复原图一致
+            # 直接使用PIL图像，不做fetch_image处理
             if hasattr(original_image, 'size'):
-                print(f"[DEBUG] 原图预处理前尺寸: {original_image.size}")
-                
-                # 将原图也通过相同的预处理流程
-                # 注意：fetch_image() 只接受一个参数，不支持 size_factor
-                try:
-                    from qwen_vl_utils import fetch_image
-                    # 创建与复原图相同的数据结构
-                    original_dict = {"image": original_image}
-                    original_image_processed = fetch_image(original_dict)
-                    print(f"[DEBUG] 原图预处理后尺寸: {original_image_processed.size}")
-                    original_image = original_image_processed
-                except Exception as e:
-                    print(f"[DEBUG] 原图预处理失败，使用原图: {e}")
-                    # 保持原图不变
+                print(f"[DEBUG] 原图尺寸（直接使用PIL）: {original_image.size}")
             elif hasattr(original_image, 'shape'):
                 print(f"[DEBUG] 原图是numpy数组，shape: {original_image.shape}")
                 # 如果是numpy数组，转换为PIL图像
                 from PIL import Image
                 if len(original_image.shape) == 3:
-                    original_pil = Image.fromarray(original_image.astype('uint8'))
+                    original_image = Image.fromarray(original_image.astype('uint8'))
                 else:
-                    original_pil = Image.fromarray(original_image.astype('uint8'), mode='L')
-                print(f"[DEBUG] 原图numpy转PIL后尺寸: {original_pil.size}")
-                
-                # 应用fetch_image（与复原图相同的预处理）
-                # 注意：fetch_image() 只接受一个参数，不支持 size_factor
-                try:
-                    from qwen_vl_utils import fetch_image
-                    original_dict = {"image": original_pil}
-                    original_image_processed = fetch_image(original_dict)
-                    print(f"[DEBUG] 原图预处理后尺寸: {original_image_processed.size}")
-                    original_image = original_image_processed
-                except Exception as e:
-                    print(f"[DEBUG] 原图预处理失败，使用PIL图像: {e}")
-                    original_image = original_pil
+                    original_image = Image.fromarray(original_image.astype('uint8'), mode='L')
+                print(f"[DEBUG] 原图numpy转PIL后尺寸: {original_image.size}")
             else:
                 print(f"[DEBUG] 原图格式异常: {type(original_image)}, 无法获取尺寸")
                 

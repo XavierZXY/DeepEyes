@@ -1562,16 +1562,11 @@ def compute_degraded_and_restored_metrics_for_indices(
                 skip_count += 1
                 continue
             
-            # 应用fetch_image处理
-            try:
-                from qwen_vl_utils import fetch_image
-                from PIL import Image
-                if isinstance(original_img_raw, Image.Image):
-                    original_dict = {"image": original_img_raw}
-                    original_img = fetch_image(original_dict)
-                else:
-                    original_img = original_img_raw
-            except Exception as e:
+            # 直接使用PIL图像，不做fetch_image处理
+            from PIL import Image
+            if isinstance(original_img_raw, Image.Image):
+                original_img = original_img_raw
+            else:
                 original_img = original_img_raw
             
             # 提取退化图（image_history[0]）
@@ -1781,27 +1776,20 @@ def compute_reference_metrics_for_batch(
             if idx < 3:
                 print(f"[DEBUG REF METRICS] Sample {idx}: Original image (raw) size: {original_img_raw.size if hasattr(original_img_raw, 'size') else 'no size attr'}")
             
-            # 对原图应用fetch_image处理（与复原图相同的预处理）
-            try:
-                from qwen_vl_utils import fetch_image
-                from PIL import Image
-                
-                # 如果original_img_raw是PIL Image，转换为fetch_image所需的格式
-                if isinstance(original_img_raw, Image.Image):
-                    original_dict = {"image": original_img_raw}
-                    original_img = fetch_image(original_dict)
-                elif isinstance(original_img_raw, bytes):
-                    import io
-                    pil_img = Image.open(io.BytesIO(original_img_raw))
-                    original_dict = {"image": pil_img}
-                    original_img = fetch_image(original_dict)
-                else:
-                    original_img = original_img_raw
-                
-                print(f"[DEBUG REF METRICS] Sample {idx}: original_img size after fetch_image: {original_img.size if hasattr(original_img, 'size') else 'unknown'}")
-            except Exception as e:
-                print(f"[DEBUG REF METRICS] Sample {idx}: fetch_image failed, using raw: {e}")
+            # 直接使用PIL图像，不做fetch_image处理
+            # （fetch_image是为vision transformer准备的，质量评估不需要）
+            from PIL import Image
+            
+            if isinstance(original_img_raw, Image.Image):
                 original_img = original_img_raw
+            elif isinstance(original_img_raw, bytes):
+                import io
+                original_img = Image.open(io.BytesIO(original_img_raw))
+            else:
+                original_img = original_img_raw
+            
+            if idx < 3:
+                print(f"[DEBUG REF METRICS] Sample {idx}: original_img size (直接使用PIL): {original_img.size if hasattr(original_img, 'size') else 'unknown'}")
             
             # 计算有参考指标（现在尺寸应该匹配）
             if idx < 3:
