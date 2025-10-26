@@ -1575,18 +1575,11 @@ def compute_degraded_and_restored_metrics_for_indices(
                 skip_count += 1
                 continue
             
-            # 对退化图应用fetch_image处理（与原图对齐维度）
-            try:
-                from qwen_vl_utils import fetch_image
-                from PIL import Image
-                if isinstance(degraded_img_raw, Image.Image):
-                    degraded_dict = {"image": degraded_img_raw}
-                    degraded_img = fetch_image(degraded_dict)
-                else:
-                    degraded_img = degraded_img_raw
-            except Exception as e:
-                if calculated_count < 3:
-                    print(f"[DEBUG DEGRADED METRICS] Sample {idx}: fetch_image on degraded failed, using raw: {e}")
+            # 直接使用PIL图像，不做fetch_image处理
+            from PIL import Image
+            if isinstance(degraded_img_raw, Image.Image):
+                degraded_img = degraded_img_raw
+            else:
                 degraded_img = degraded_img_raw
             
             # 确保尺寸一致（处理low resolution等改变尺寸的退化）
@@ -1605,19 +1598,11 @@ def compute_degraded_and_restored_metrics_for_indices(
             if len(img_hist) >= 2:
                 restored_img_raw = extract_pil_image_from_data(img_hist[-1])
                 if restored_img_raw is not None:
-                    # 工具返回的图像是纯PIL.Image，没有经过fetch_image处理
-                    # 需要应用fetch_image来与原图对齐维度
-                    try:
-                        from qwen_vl_utils import fetch_image
-                        from PIL import Image
-                        if isinstance(restored_img_raw, Image.Image):
-                            restored_dict = {"image": restored_img_raw}
-                            restored_img = fetch_image(restored_dict)
-                        else:
-                            restored_img = restored_img_raw
-                    except Exception as e:
-                        if calculated_count < 3:
-                            print(f"[DEBUG DEGRADED METRICS] Sample {idx}: fetch_image for restored failed, using raw: {e}")
+                    # 直接使用PIL图像，不做fetch_image处理
+                    from PIL import Image
+                    if isinstance(restored_img_raw, Image.Image):
+                        restored_img = restored_img_raw
+                    else:
                         restored_img = restored_img_raw
                     
                     # 确保尺寸一致（处理super_resolution等改变尺寸的工具）
