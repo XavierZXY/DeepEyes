@@ -28,7 +28,7 @@ class DeblurToolbox(ToolBase):
     # 从环境变量读取IP地址，保留端口号5003
     @property
     def server_url(self):
-        tool_service_ip = os.environ.get('TOOL_SERVICE_IP', '10.21.9.34')
+        tool_service_ip = os.environ.get('TOOL_SERVICE_IP', '10.21.9.6')
         return f"http://{tool_service_ip}:5003/deblur"
 
     def __init__(self, _name="deblur_toolbox", _desc="A tool for deblurring images using a remote DRBNet API.", _params={}, **kwargs):
@@ -114,7 +114,7 @@ class DeblurToolbox(ToolBase):
             print(f"[DEBLUR DEBUG] 发送图像到去模糊服务器: {current_image.size}", flush=True)
             
             # 发送 POST 请求到 DRBNet 服务器
-            response = requests.post(self.server_url, files=files, timeout=60)
+            response = requests.post(self.server_url, files=files, timeout=180)
             
             # 检查服务器响应是否成功
             if response.status_code != 200:

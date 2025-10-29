@@ -1,0 +1,2 @@
+Degradation_Type,Level,Tool,Tool_Name,Baseline_PSNR,Baseline_SSIM,Baseline_LPIPS,Restored_PSNR,Restored_SSIM,Restored_LPIPS,Improve_PSNR%,Improve_SSIM%,Improve_LPIPS%,Success_Rate,Num_Samples,Success_Count
+haze,low,DehazeFormer,dehazeformer_dehaze,28.835164011137383,0.9739641889468097,0.012422844767570496,20.542197157895046,0.8938972258803956,0.043809808790683746,-28.759908735179156,-8.22072967107693,-252.6552058756146,1.0,1,1

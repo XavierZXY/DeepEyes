@@ -50,10 +50,11 @@ from verl.workers.agent.envs.mm_process_engine.BrighteningToolbox import (
     ConstantShiftTool,
     HistogramEqualizationTool
 )
+from verl.workers.agent.envs.mm_process_engine.NeRDToolbox import NeRDDerainingToolbox
 from verl.workers.agent.envs.mm_process_engine.FBCNNToolbox import FBCNNJpegArtifactRemovalToolbox
 from verl.workers.agent.envs.mm_process_engine.SCUNetToolbox import SCUNetRealDenoisingPSNRToolbox,SCUNetRealDenoisingGANToolbox,SCUNetColorDenoisingToolbox
-from verl.workers.agent.envs.mm_process_engine.RetinexformerToolbox import RetinexformerLOLv1Toolbox, RetinexformerLOLv2RealToolbox, RetinexformerLOLv2SyntheticToolbox,RetinexformerSDSDIndoorToolbox
-
+from verl.workers.agent.envs.mm_process_engine.RetinexformerToolbox import RetinexformerLOLv1Toolbox, RetinexformerLOLv2RealToolbox, RetinexformerLOLv2SyntheticToolbox,RetinexformerSDSDIndoorToolbox,RetinexformerFiveKToolbox
+from verl.workers.agent.envs.mm_process_engine.HATToolbox import HATSuperResolutionToolbox
 # ==================== 退化类型到工具的映射 ====================
 DEGRADATION_TO_TOOLS = {
     'motion blur': [
@@ -74,15 +75,17 @@ DEGRADATION_TO_TOOLS = {
         ('SCUNetRealDenoisingGANToolbox', SCUNetRealDenoisingGANToolbox, {}),
     ],
     'rain': [
-        ('RestormerDerrainingToolbox', RestormerDerrainingToolbox, {}),
+        # ('RestormerDerrainingToolbox', RestormerDerrainingToolbox, {}),
+        ('NeRDDerainingToolbox', NeRDDerainingToolbox, {}),
         # ('MPRNetDeraininingToolbox', MPRNetDeraininingToolbox, {}),
     ],
     'low resolution': [
-        ('SwinIRSrToolbox', SwinIRSrToolbox, {'scale': 2}),
+        # ('SwinIRSrToolbox', SwinIRSrToolbox, {'scale': 2}),
+        ('HATSuperResolutionToolbox', HATSuperResolutionToolbox, {'scale': 4}),
     ],
     'dark': [
         # ('GammaCorrectionTool', GammaCorrectionTool, {'gamma': 0.6}),
-        ('RetinexformerSDSDIndoorToolbox', RetinexformerSDSDIndoorToolbox, {}),
+        ('RetinexformerFiveKToolbox', RetinexformerFiveKToolbox, {}),
         # ('ConstantShiftTool', ConstantShiftTool, {'shift': 50}),
         # ('HistogramEqualizationTool', HistogramEqualizationTool, {'clipLimit': 3.0}),
     ],

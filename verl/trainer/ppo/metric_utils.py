@@ -182,6 +182,13 @@ def compute_throughout_metrics(batch: DataProto, timing_raw: Dict[str, float], n
 
 
 def compute_agent_metrics(batch: DataProto):
+    """
+    Compute agent-related metrics including tool call statistics.
+    
+    Note: The meaning of tool_call metrics depends on conversation mode:
+    - multi_tool_planning: counts number of tools in the final tool chain
+    - single_tool_iterative: counts total number of tool calls across all turns
+    """
     if 'tool_cnt' not in batch.batch.keys():
         return {}
 
@@ -198,11 +205,21 @@ def compute_agent_metrics(batch: DataProto):
     
     for key in tool_match_keys:
         tensor = batch.batch.pop(key).detach().cpu()
-        # 由于所有样本的值都相同（全局统计），取第一个即可
+        # 批次级别统计：所有样本的值都相同（当前batch的统计），取第一个即可
+        # 每个step的batch不同，所以这个值会随step变化
         metrics[key] = tensor[0, 0].item() if tensor.numel() > 0 else 0.0
     
-    if tool_match_keys:
-        print(f"[METRICS] 收集了 {len(tool_match_keys)} 个工具-退化匹配指标")
+    # 收集工具数量匹配统计（如果存在）
+    # 这些指标以 tool_count_match/ 开头
+    tool_count_match_keys = [key for key in batch.batch.keys() if key.startswith('tool_count_match/')]
+    
+    for key in tool_count_match_keys:
+        tensor = batch.batch.pop(key).detach().cpu()
+        # 批次级别统计：所有样本的值都相同（当前batch的统计），取第一个即可
+        metrics[key] = tensor[0, 0].item() if tensor.numel() > 0 else 0.0
+    
+    if tool_match_keys or tool_count_match_keys:
+        print(f"[METRICS] 收集了 {len(tool_match_keys)} 个工具-退化匹配指标 + {len(tool_count_match_keys)} 个工具数量匹配指标")
     
     return metrics
 
@@ -298,6 +315,73 @@ def compute_reward_component_metrics(reward_extra_infos_dict: dict[str, list]) -
             
             # 也记录包含所有样本的统计（包括0分）
             metrics['reward/degradation_type_score_mean_all'] = np.mean(degradation_type_scores)
+    
+    # 工具多样性bonus统计 (tool_diversity_bonus: 0.0 或 0.1)
+    if 'ir_tool_diversity_bonus' in reward_extra_infos_dict:
+        tool_diversity_bonuses = reward_extra_infos_dict['ir_tool_diversity_bonus']
+        if len(tool_diversity_bonuses) > 0:
+            total_samples = len(tool_diversity_bonuses)
+            bonus_count = sum(1 for b in tool_diversity_bonuses if b > 0.0)
+            no_bonus_count = total_samples - bonus_count
+            bonus_ratio = bonus_count / total_samples
+            
+            # 详细统计指标
+            metrics['reward/tool_diversity_bonus_obtained_count'] = bonus_count  # 获得bonus的样本数
+            metrics['reward/tool_diversity_bonus_not_obtained_count'] = no_bonus_count  # 未获得bonus的样本数
+            metrics['reward/tool_diversity_bonus_total_samples'] = total_samples  # 总样本数
+            metrics['reward/tool_diversity_bonus_obtained_ratio'] = bonus_ratio  # 获得bonus的比例
+            metrics['reward/tool_diversity_bonus_mean'] = np.mean(tool_diversity_bonuses)  # 平均bonus值
+            
+            # 分析未获得bonus的原因（如果有其他统计信息）
+            if 'ir_is_clean_sample' in reward_extra_infos_dict and 'ir_format_score' in reward_extra_infos_dict:
+                clean_samples = reward_extra_infos_dict['ir_is_clean_sample']
+                format_scores = reward_extra_infos_dict['ir_format_score']
+                
+                # 统计未获得bonus的原因
+                clean_count = sum(1 for i, b in enumerate(tool_diversity_bonuses) if b == 0.0 and i < len(clean_samples) and clean_samples[i] > 0)
+                format_error_count = sum(1 for i, b in enumerate(tool_diversity_bonuses) if b == 0.0 and i < len(format_scores) and format_scores[i] <= 0)
+                tool_repeat_count = no_bonus_count - clean_count - format_error_count  # 剩下的就是工具重复
+                
+                metrics['reward/tool_diversity_bonus_no_bonus_clean'] = clean_count
+                metrics['reward/tool_diversity_bonus_no_bonus_format_error'] = format_error_count
+                metrics['reward/tool_diversity_bonus_no_bonus_tool_repeat'] = tool_repeat_count
+                
+                # 新增：只统计格式正确的样本（与 repeat_ratio 统计范围一致）
+                # 格式正确 = 非clean样本 且 format_score > 0
+                format_correct_indices = [
+                    i for i in range(total_samples)
+                    if i < len(format_scores) and format_scores[i] > 0
+                    and i < len(clean_samples) and clean_samples[i] == 0
+                ]
+                
+                format_correct_total = len(format_correct_indices)
+                format_correct_bonus_count = sum(1 for i in format_correct_indices if tool_diversity_bonuses[i] > 0)
+                format_correct_no_bonus_count = format_correct_total - format_correct_bonus_count
+                format_correct_bonus_ratio = format_correct_bonus_count / format_correct_total if format_correct_total > 0 else 0.0
+                
+                # 这些指标与 repeat_ratio 统计范围一致（只看格式正确且有退化的样本）
+                metrics['reward/tool_diversity_bonus_format_correct_obtained_count'] = format_correct_bonus_count
+                metrics['reward/tool_diversity_bonus_format_correct_not_obtained_count'] = format_correct_no_bonus_count
+                metrics['reward/tool_diversity_bonus_format_correct_total_samples'] = format_correct_total
+                metrics['reward/tool_diversity_bonus_format_correct_obtained_ratio'] = format_correct_bonus_ratio
+                
+                # 打印详细统计信息
+                print(f"[METRICS] 🎯 Tool Diversity Bonus Statistics:")
+                print(f"[METRICS]   ✅ Obtained bonus: {bonus_count}/{total_samples} samples ({bonus_ratio:.1%})")
+                print(f"[METRICS]   ❌ No bonus breakdown ({no_bonus_count} samples):")
+                print(f"[METRICS]      🟢 Clean samples: {clean_count}")
+                print(f"[METRICS]      ❌ Format errors: {format_error_count}")
+                print(f"[METRICS]      🔁 Tool repeats: {tool_repeat_count}")
+                print(f"[METRICS]   📊 Average bonus value: {np.mean(tool_diversity_bonuses):.4f}")
+                print(f"[METRICS]   📐 Format-correct samples only (matches repeat_ratio scope):")
+                print(f"[METRICS]      ✅ Obtained: {format_correct_bonus_count}/{format_correct_total} ({format_correct_bonus_ratio:.1%})")
+                print(f"[METRICS]      ❌ Not obtained: {format_correct_no_bonus_count}/{format_correct_total}")
+            else:
+                # 打印基本统计信息
+                print(f"[METRICS] 🎯 Tool Diversity Bonus Statistics:")
+                print(f"[METRICS]   ✅ Obtained bonus: {bonus_count}/{total_samples} samples ({bonus_ratio:.1%})")
+                print(f"[METRICS]   ❌ No bonus: {no_bonus_count}/{total_samples} samples ({(1-bonus_ratio):.1%})")
+                print(f"[METRICS]   📊 Average bonus value: {np.mean(tool_diversity_bonuses):.4f}")
     
     # 有参考图像质量指标统计 (SSIM, LPIPS, PSNR)
     # 这些指标从reward_extra_infos_dict中提取（如果有的话）

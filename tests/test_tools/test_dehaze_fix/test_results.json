@@ -1,0 +1,34 @@
+{
+  "haze": {
+    "degradation_type": "haze",
+    "tools": {
+      "dehazeformer_dehaze": {
+        "display_name": "DehazeFormer",
+        "levels": {
+          "low": {
+            "metrics": {
+              "psnr": 20.542197157895046,
+              "ssim": 0.8938972258803956,
+              "lpips": 0.043809808790683746,
+              "success_rate": 1.0
+            },
+            "improvement": {
+              "psnr": -28.759908735179156,
+              "ssim": -8.22072967107693,
+              "lpips": -252.6552058756146
+            },
+            "num_samples": 1,
+            "success_count": 1
+          }
+        }
+      }
+    },
+    "baseline": {
+      "low": {
+        "psnr": 28.835164011137383,
+        "ssim": 0.9739641889468097,
+        "lpips": 0.012422844767570496
+      }
+    }
+  }
+}

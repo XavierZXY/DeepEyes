@@ -1,0 +1,20 @@
+{
+  "api_key": "EMPTY",
+  "api_url": "http://10.21.9.6:8008/v1",
+  "model_name": "Qwen2.5-VL-7B-Instruct",
+  "data_path": "/app/xiaominl/air_full_v1/shard-test-000000.parquet",
+  "output_dir": "./eval_results",
+  "conversation_mode": "multi_tool_planning",
+  "max_turns": 1,
+  "single_response_max_tokens": 10240,
+  "temperature": 0.7,
+  "top_p": 0.9,
+  "use_parquet_system_prompt": true,
+  "custom_system_prompt": null,
+  "tool_service_ip": "10.21.9.6",
+  "num_samples": 10,
+  "batch_size": 1,
+  "concurrent_workers": 1,
+  "compute_reference_metrics": true,
+  "compute_no_reference_metrics": true
+}

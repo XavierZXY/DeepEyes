@@ -34,7 +34,7 @@ class DehazeFormerToolbox(ToolBase):
         super().__init__(name=self.name)
         # 从环境变量读取IP地址，保留端口号5002
         if api_url is None:
-            tool_service_ip = os.environ.get('TOOL_SERVICE_IP', '10.21.9.34')
+            tool_service_ip = os.environ.get('TOOL_SERVICE_IP', '10.21.9.6')
             api_url = f'http://{tool_service_ip}:5002/dehaze'
         self.api_url = api_url
         self.multi_modal_data = None
@@ -106,8 +106,9 @@ class DehazeFormerToolbox(ToolBase):
 
             # Call the DehazeFormer API
             files = {'image': ('hazy_image.png', img_byte_arr, 'image/png')}
+            data = {'queue': 'true'}  # 启用队列机制，避免并发时直接拒绝
             print(f"[DEHAZE DEBUG] 发送图像到去雾服务器", flush=True)
-            response = requests.post(self.api_url, files=files, timeout=60)
+            response = requests.post(self.api_url, files=files, data=data, timeout=180)
             
             if response.status_code != 200:
                 raise ConnectionError(f"API request failed with status code {response.status_code}: {response.text}")

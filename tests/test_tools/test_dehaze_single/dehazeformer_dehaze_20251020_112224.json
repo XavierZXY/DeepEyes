@@ -1,0 +1,69 @@
+{
+  "tool_name": "dehazeformer_dehaze",
+  "display_name": "DehazeFormer",
+  "degradation_type": "haze",
+  "baseline": {
+    "high": {
+      "psnr": 12.202182943823251,
+      "ssim": 0.7576088703209417,
+      "lpips": 0.1859715829292933
+    },
+    "low": {
+      "psnr": 28.03399410812113,
+      "ssim": 0.9507435212747152,
+      "lpips": 0.01554530719295144
+    },
+    "medium": {
+      "psnr": 17.54967239831417,
+      "ssim": 0.8535796983128717,
+      "lpips": 0.09265229851007462
+    }
+  },
+  "levels": {
+    "high": {
+      "metrics": {
+        "psnr": 18.7241256362293,
+        "ssim": 0.8804161422466396,
+        "lpips": 0.07909665753444035
+      },
+      "improvement": {
+        "psnr": 53.448983042066736,
+        "ssim": 16.20985138065684,
+        "lpips": 57.468417330989205
+      },
+      "success_rate": 1.0,
+      "num_samples": 3,
+      "success_count": 3
+    },
+    "low": {
+      "metrics": {
+        "psnr": 20.63213490657931,
+        "ssim": 0.8960254352541083,
+        "lpips": 0.04988748331864675
+      },
+      "improvement": {
+        "psnr": -26.403156014781302,
+        "ssim": -5.755294124670268,
+        "lpips": -220.9166772932397
+      },
+      "success_rate": 1.0,
+      "num_samples": 3,
+      "success_count": 3
+    },
+    "medium": {
+      "metrics": {
+        "psnr": 20.532894268605276,
+        "ssim": 0.9056072335626157,
+        "lpips": 0.06300308431188266
+      },
+      "improvement": {
+        "psnr": 16.99873252664065,
+        "ssim": 6.095217043303414,
+        "lpips": 32.00051663582639
+      },
+      "success_rate": 1.0,
+      "num_samples": 3,
+      "success_count": 3
+    }
+  }
+}

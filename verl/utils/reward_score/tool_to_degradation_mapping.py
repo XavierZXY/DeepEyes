@@ -29,6 +29,7 @@ TOOL_TO_DEGRADATION_TYPE = {
     "restormer_motion_deblurring": "motion blur",
     "mprnet_motion_deblurring": "motion blur",
     "xrestormer_motion_deblurring": "motion blur",
+    "nafnet_deblur": "motion blur",
     # 散焦模糊
     "restormer_defocus_deblurring": "defocus blur",
     "drbnet_defocus_deblurring": "defocus blur",

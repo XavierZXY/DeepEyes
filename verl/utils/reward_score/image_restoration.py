@@ -27,10 +27,12 @@ ALLOWED_TOOLS = {
     "mprnet_motion_deblurring",
     "restormer_motion_deblurring",
     "restormer_defocus_deblurring",
+    "nafnet_deblur",
     # Deraining
     "mprnet_deraining",
     "restormer_deraining",
     "xrestormer_deraining",
+    "nerd_deraining",
     # JPEG artifact removal
     "swinir_jpeg_artifact_removal", 
     "fbcnn_jpeg_artifact_removal",
@@ -38,6 +40,7 @@ ALLOWED_TOOLS = {
     "fbcnn_blind_quality_assessment",
     # Super resolution
     "swinir_super_resolution",
+    "hat_super_resolution",  # HAT工具
     # Denoising
     "swinir_denoising", 
     "mprnet_denoising",
@@ -45,7 +48,7 @@ ALLOWED_TOOLS = {
     "scunet_real_denoising_gan",
     "scunet_color_denoising",
     "scunet_gray_denoising",
-    # Low-light enhancement
+    # Low-light enhancement (Retinexformer系列)
     "retinexformer_enhance",
     "retinexformer_lol_v1",
     "retinexformer_lol_v2_real",
@@ -219,18 +222,21 @@ def check_multiturn_format_v2(response_str: str, is_clean_sample: bool = False) 
     return 1.0
 
 
-def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int = 0, is_clean_sample: bool = False) -> float:
+def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int = 0, is_clean_sample: bool = False, max_tools_per_turn: int = 0) -> float:
     """
     Enhanced multi-turn format checking with additional constraints.
     
     Inherits all requirements from check_multiturn_format_v2, plus:
     6. Answer must be in the FINAL turn only (if present)
-    7. Total tool_call count must be >= degradation_count (for non-clean samples)
+    7. Total tool_call count must be >= 1 (for non-clean samples)
+       注：原规则"≥退化数量"已放宽，现在只要求至少调用1个工具
+    8. Single turn tool_call count must be <= max_tools_per_turn (if max_tools_per_turn > 0)
     
     Args:
         response_str: The model's response string
-        degradation_count: Number of degradations in the image (for tool_call count validation)
+        degradation_count: Number of degradations in the image (for validation, currently not strictly enforced)
         is_clean_sample: Whether this is a clean image sample
+        max_tools_per_turn: Maximum number of tools allowed per turn (0 = no limit)
     
     Returns:
         1.0: Perfect format (all requirements met including new constraints)
@@ -299,8 +305,14 @@ def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int
                     print(f' [ENHANCED FORMAT] 第{i+1}轮tool_call格式错误（不是非空列表）')
                     return -1.0
                 
+                # NEW CONSTRAINT 3: Check single turn tool count limit
+                turn_tool_count = len(tool_calls)
+                if max_tools_per_turn > 0 and turn_tool_count > max_tools_per_turn:
+                    print(f' [ENHANCED FORMAT] 第{i+1}轮工具数量超限: {turn_tool_count} > {max_tools_per_turn}（单轮最大工具数）')
+                    return -1.0
+                
                 # Count total tool calls
-                total_tool_calls += len(tool_calls)
+                total_tool_calls += turn_tool_count
                 
                 for tool_call in tool_calls:
                     if not isinstance(tool_call, dict):
@@ -346,12 +358,21 @@ def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int
             print(f' [ENHANCED FORMAT] Answer出现在第{answer_turns[0]}轮，但应该在最后一轮（第{len(turns)}轮）')
             return -1.0
     
-    # NEW CONSTRAINT 2: Tool_call count must be >= degradation_count (for non-clean samples)
-    if not is_clean_sample and degradation_count > 0:
-        if total_tool_calls < degradation_count:
-            print(f' [ENHANCED FORMAT] Tool_call数量不足: {total_tool_calls} < {degradation_count}（退化数量）')
+    # NEW CONSTRAINT 2: Tool_call count validation (for non-clean samples)
+    # 修改：要求至少调用1个工具，而不是≥退化数量
+    # 原因：模型可能需要尝试，不强制必须为每个退化都调用工具
+    if not is_clean_sample:
+        if total_tool_calls < 1:
+            print(f' [ENHANCED FORMAT] Tool_call数量不足: {total_tool_calls} < 1（至少需要1个工具）')
             return -1.0
-        print(f' [ENHANCED FORMAT] Tool_call数量验证通过: {total_tool_calls} >= {degradation_count}')
+        print(f' [ENHANCED FORMAT] Tool_call数量验证通过: {total_tool_calls} >= 1')
+    
+    # 【原规则保留，可恢复】注释掉的是原来的严格规则：总工具数≥退化数量
+    # if not is_clean_sample and degradation_count > 0:
+    #     if total_tool_calls < degradation_count:
+    #         print(f' [ENHANCED FORMAT] Tool_call数量不足: {total_tool_calls} < {degradation_count}（退化数量）')
+    #         return -1.0
+    #     print(f' [ENHANCED FORMAT] Tool_call数量验证通过: {total_tool_calls} >= {degradation_count}')
     
     # All checks passed (including enhanced constraints)
     print(f' [ENHANCED FORMAT] 所有检查通过: 轮次={len(turns)}, tool_calls={total_tool_calls}, answer_turns={answer_turns}')
@@ -1287,6 +1308,88 @@ def check_clean_image_response_v2(response_str: str) -> bool:
     return False
 
 
+def compute_tool_diversity_bonus_v2(solution_str: str, conversation_mode: str = 'multi_tool_planning') -> float:
+    """
+    计算工具多样性bonus奖励
+    
+    Args:
+        solution_str: 模型的响应字符串
+        conversation_mode: 对话模式 ('multi_tool_planning' 或 'single_tool_iterative')
+        
+    Returns:
+        0.1 如果满足多样性条件，否则 0.0
+    """
+    import re
+    import json
+    
+    # 提取所有轮次的工具调用
+    tool_call_matches = list(re.finditer(r'<tool_call>\s*(\[.*?\])\s*</tool_call>', solution_str, re.DOTALL))
+    
+    if not tool_call_matches:
+        # 没有工具调用，不给bonus
+        return 0.0
+    
+    if conversation_mode == 'multi_tool_planning':
+        # 多工具模式：只检查最后一轮的工具链
+        if len(tool_call_matches) == 0:
+            return 0.0
+        
+        try:
+            # 获取最后一轮的工具调用
+            last_tool_call = tool_call_matches[-1]
+            tools = json.loads(last_tool_call.group(1))
+            
+            if not isinstance(tools, list) or len(tools) == 0:
+                return 0.0
+            
+            # 提取工具名称
+            tool_names = []
+            for tool_dict in tools:
+                if isinstance(tool_dict, dict) and 'name' in tool_dict:
+                    tool_names.append(tool_dict['name'])
+            
+            if len(tool_names) == 0:
+                return 0.0
+            
+            # 检查是否所有工具都不重复
+            if len(tool_names) == len(set(tool_names)):
+                print(f' [DEBUG tool_diversity_bonus] 多工具模式: 最后一轮{len(tool_names)}个工具都不重复，获得bonus=0.1')
+                return 0.1
+            else:
+                print(f' [DEBUG tool_diversity_bonus] 多工具模式: 最后一轮有重复工具，不给bonus')
+                return 0.0
+                
+        except Exception as e:
+            print(f' [DEBUG tool_diversity_bonus] 解析工具调用失败: {e}')
+            return 0.0
+    
+    else:  # single_tool_iterative
+        # 单工具模式：检查每一轮的工具是否都不一样
+        try:
+            all_tool_names = []
+            for match in tool_call_matches:
+                tools = json.loads(match.group(1))
+                if isinstance(tools, list):
+                    for tool_dict in tools:
+                        if isinstance(tool_dict, dict) and 'name' in tool_dict:
+                            all_tool_names.append(tool_dict['name'])
+            
+            if len(all_tool_names) == 0:
+                return 0.0
+            
+            # 检查所有轮次的工具是否都不重复
+            if len(all_tool_names) == len(set(all_tool_names)):
+                print(f' [DEBUG tool_diversity_bonus] 单工具模式: {len(all_tool_names)}轮工具都不重复，获得bonus=0.1')
+                return 0.1
+            else:
+                print(f' [DEBUG tool_diversity_bonus] 单工具模式: 有重复工具，不给bonus')
+                return 0.0
+                
+        except Exception as e:
+            print(f' [DEBUG tool_diversity_bonus] 解析工具调用失败: {e}')
+            return 0.0
+
+
 def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_info: Dict = None, 
                      strict_format: bool = True, accuracy_mode: str = "image_quality", 
                      format_content_aware: bool = False, discretize_levels: int = 0,
@@ -1294,7 +1397,8 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
                      degradation_type_reward_weight: float = 1.0,
                      format_reward_weight: float = 0.3,
                      quality_reward_weight: float = 0.7,
-                     use_enhanced_format: bool = False) -> float:
+                     use_enhanced_format: bool = False,
+                     max_tools_per_turn: int = 0) -> float:
     """
     Compute reward score for image restoration task (v2 format).
     
@@ -1320,6 +1424,10 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
         use_enhanced_format: 是否使用增强格式检查（默认False）
                            - True: 使用check_multiturn_format_v3_enhanced，增加answer必须在最后一轮、tool_call数量>=退化数量的约束
                            - False: 使用原有的check_multiturn_format_v2
+        max_tools_per_turn: 单轮最大工具数限制（默认0=无限制）
+                           - >0: 每轮最多允许调用的工具数量，超过则格式违规（-1.0）
+                           - 0: 不限制单轮工具数量
+                           - 只在use_enhanced_format=True时生效
     
     奖励结构说明:
         默认奖励 = FORMAT_WEIGHT × format_score + QUALITY_WEIGHT × quality_score
@@ -1393,7 +1501,8 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
             format_score = check_multiturn_format_v3_enhanced(
                 solution_str, 
                 degradation_count=degradation_count, 
-                is_clean_sample=is_clean_sample
+                is_clean_sample=is_clean_sample,
+                max_tools_per_turn=max_tools_per_turn
             )
         else:
             # Use standard multi-turn format checking for strict mode (已经内置了clean/non-clean判断)
@@ -1513,12 +1622,31 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
     
     print(f' [DEBUG image_restoration_v2] total_score={total_score:.3f} (包含退化类型奖励)' if enable_degradation_type_reward and format_score > 0 else f' [DEBUG image_restoration_v2] total_score={total_score:.3f}')
     
+    # 计算工具多样性bonus（只有格式正确且非clean样本时才给）
+    tool_diversity_bonus = 0.0
+    if format_score > 0 and not is_clean_sample:
+        # 从extra_info获取对话模式
+        conversation_mode = 'multi_tool_planning'  # 默认值
+        if extra_info is not None and 'conversation_mode' in extra_info:
+            conversation_mode = extra_info['conversation_mode']
+        
+        tool_diversity_bonus = compute_tool_diversity_bonus_v2(solution_str, conversation_mode)
+        
+        if tool_diversity_bonus > 0:
+            total_score += tool_diversity_bonus
+            print(f' [DEBUG tool_diversity_bonus] bonus={tool_diversity_bonus:.3f} added, new total_score={total_score:.3f}')
+    elif is_clean_sample:
+        print(f' [DEBUG tool_diversity_bonus] skipped for clean sample')
+    elif format_score <= 0:
+        print(f' [DEBUG tool_diversity_bonus] skipped due to format error')
+    
     # 返回包含各项分数的字典（用于监控）
     result_dict = {
-        "score": total_score,                           # 总分（格式+质量+可选的退化类型）
+        "score": total_score,                           # 总分（格式+质量+可选的退化类型+工具多样性bonus）
         "format_score": format_score,                   # 格式分数（1.0或-1.0）
         "quality_score": quality_score,                 # 图像质量分数（0.0~1.0）
         "degradation_type_score": degradation_type_score,  # 退化类型分数（0.0~1.0，仅在启用时计算）
+        "tool_diversity_bonus": tool_diversity_bonus,   # 工具多样性bonus（0.0或0.1）
         # 保留旧字段以兼容
         "accuracy_score": quality_score,                # 兼容旧代码，实际是图像质量分数
         "degradation_order_score": quality_score,       # 兼容旧代码

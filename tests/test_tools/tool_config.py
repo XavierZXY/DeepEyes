@@ -43,6 +43,7 @@ TOOL_POOL = {
         ("restormer_motion_deblurring", "Restormer"),
         ("mprnet_motion_deblurring", "MPRNet"),
         ("xrestormer_motion_deblurring", "XRestormer"),
+        ("nafnet_deblur", "NAFNet"),
     ],
     
     # ========================================
@@ -186,6 +187,9 @@ TOOL_CLASS_MAP = {
     "xrestormer_motion_deblurring": ("XRestormerToolbox", "XRestormerMotionDeblurringToolbox"),
     "xrestormer_deraining": ("XRestormerToolbox", "XRestormerDerainToolbox"),
     
+    # NAFNet
+    "nafnet_deblur": ("NAFNetToolbox", "NAFNetDeblurToolbox"),
+    
     # FBCNN
     "fbcnn_jpeg_artifact_removal": ("FBCNNToolbox", "FBCNNJpegArtifactRemovalToolbox"),
     
@@ -230,6 +234,8 @@ TOOL_API_PORTS = {
     "XRestormer": 5007,
     "SCUNet": 5008,
     "Retinexformer": 5009,
+    "HAT": 5010,
+    "NAFNet": 5012,
 }
 
 
@@ -282,6 +288,7 @@ PRESET_STANDARD = {
         ("restormer_motion_deblurring", "Restormer"),
         ("mprnet_motion_deblurring", "MPRNet"),
         ("xrestormer_motion_deblurring", "XRestormer"),
+        ("nafnet_deblur", "NAFNet"),
     ],
     "defocus_blur": [
         ("restormer_defocus_deblurring", "Restormer"),

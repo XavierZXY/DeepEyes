@@ -291,7 +291,7 @@ def compute_tool_degradation_matching_stats(
     all_degradation_types
 ):
     """
-    计算工具-退化类型匹配统计
+    计算工具-退化类型匹配统计（批次级别，每个step的统计）
     
     Args:
         tool_calls_per_sample: List[Dict[int, List[str]]]，每个样本的每轮调用的工具
@@ -301,18 +301,30 @@ def compute_tool_degradation_matching_stats(
         all_degradation_types: List[str]，所有退化类型
         
     Returns:
-        dict: 包含重复和不重复两种统计的字典
+        dict: 批次级别的统计结果，会随每个step变化
+        
+    统计说明:
+        - unique_ratio: 当前批次中，调用了正确工具的样本比例
+        - repeat_ratio: 当前批次中，任何工具被重复调用的样本比例
+        - 每个step的batch数据不同，统计值会随之变化
     """
-    from collections import defaultdict
+    from collections import defaultdict, Counter
     
     # 初始化统计计数器
-    # 重复统计：统计工具调用总次数
-    degradation_tool_count_repeat = defaultdict(int)  # 每种退化对应的工具被调用次数（重复计数）
-    degradation_total_count = defaultdict(int)  # 每种退化类型出现的总次数
+    # 重复统计：统计有多少样本重复调用了任何工具（包括正确和错误工具，调用次数>=2）
+    degradation_sample_repeat_matched = defaultdict(int)  # 每种退化有多少样本存在工具重复调用
+    degradation_sample_total = defaultdict(int)  # 每种退化类型出现的总样本数
     
-    # 不重复统计：每个样本只统计一次
-    degradation_sample_matched_unique = defaultdict(int)  # 每种退化有多少样本调用了对应工具（不重复）
+    # 不重复统计：每个样本只统计一次（只要调用了正确工具就算）
+    degradation_sample_matched_unique = defaultdict(int)  # 每种退化有多少样本调用了正确工具
     degradation_sample_total_unique = defaultdict(int)  # 每种退化在多少个样本中出现
+    
+    # 新增：工具数量匹配统计（按退化数量分组）
+    # 统计样本调用的工具数量是否与退化数量匹配
+    tool_count_match_stats = {
+        'deg2': {'less': 0, 'exact': 0, 'more': 0, 'total': 0},  # 2种退化的样本
+        'deg3': {'less': 0, 'exact': 0, 'more': 0, 'total': 0},  # 3种退化的样本
+    }
     
     num_samples = len(tool_calls_per_sample)
     
@@ -341,10 +353,47 @@ def compute_tool_degradation_matching_stats(
             for turn in sorted(tool_calls_dict.keys()):
                 tools_to_use.extend(tool_calls_dict[turn])
         
+        # 先统计所有工具的重复情况（用于repeat_ratio，与tool_diversity_bonus一致）
+        all_tools_counter = Counter(tools_to_use)
+        sample_has_any_repeat = any(count >= 2 for count in all_tools_counter.values())
+        
+        # 【新增】统计工具数量匹配情况
+        num_degradations = len(degradation_types)
+        
+        # 计算调用了多少个对应退化的工具（去重）
+        matched_tools_set = set()
+        for tool_name in tools_to_use:
+            # 检查该工具对应当前样本的哪种退化
+            for deg_type in degradation_types:
+                correct_tools = degradation_to_tools.get(deg_type, [])
+                if tool_name in correct_tools:
+                    matched_tools_set.add(tool_name)
+                    break  # 一个工具只计数一次
+        
+        num_matched_tools = len(matched_tools_set)
+        
+        # 根据退化数量分类统计（只统计2种和3种退化的样本）
+        if num_degradations == 2:
+            tool_count_match_stats['deg2']['total'] += 1
+            if num_matched_tools < num_degradations:
+                tool_count_match_stats['deg2']['less'] += 1
+            elif num_matched_tools == num_degradations:
+                tool_count_match_stats['deg2']['exact'] += 1
+            else:  # num_matched_tools > num_degradations
+                tool_count_match_stats['deg2']['more'] += 1
+        elif num_degradations == 3:
+            tool_count_match_stats['deg3']['total'] += 1
+            if num_matched_tools < num_degradations:
+                tool_count_match_stats['deg3']['less'] += 1
+            elif num_matched_tools == num_degradations:
+                tool_count_match_stats['deg3']['exact'] += 1
+            else:  # num_matched_tools > num_degradations
+                tool_count_match_stats['deg3']['more'] += 1
+        
         # 统计每种退化类型
         for deg_type in degradation_types:
             # 增加该退化类型的总计数
-            degradation_total_count[deg_type] += 1
+            degradation_sample_total[deg_type] += 1
             degradation_sample_total_unique[deg_type] += 1
             
             # 获取该退化类型对应的工具列表
@@ -354,43 +403,26 @@ def compute_tool_degradation_matching_stats(
                 print(f"[TOOL STATS WARNING] 退化类型 '{deg_type}' 没有对应的工具映射")
                 continue
             
-            # 检查是否调用了对应的工具
-            sample_matched = False  # 该样本是否匹配（用于不重复统计）
-            
+            # 统计该样本中每个正确工具的调用次数
+            correct_tool_call_counter = Counter()
             for tool_name in tools_to_use:
                 if tool_name in correct_tools:
-                    # 重复统计：每次调用都计数
-                    degradation_tool_count_repeat[deg_type] += 1
-                    sample_matched = True
+                    correct_tool_call_counter[tool_name] += 1
             
-            # 不重复统计：样本级别只计数一次
-            if sample_matched:
+            # 不重复统计：只要调用了任何一个正确工具就算匹配
+            if len(correct_tool_call_counter) > 0:
                 degradation_sample_matched_unique[deg_type] += 1
+            
+            # 重复统计：检查该样本是否有任何工具被调用了2次或以上（所有工具，不只是正确工具）
+            # 这样和tool_diversity_bonus的逻辑一致
+            if sample_has_any_repeat:
+                degradation_sample_repeat_matched[deg_type] += 1
     
-    # 计算匹配率
+    # 计算批次级别的匹配率（每个step的统计）
     results = {}
     
-    print(f"\n[TOOL STATS] === 工具-退化匹配统计 ===")
-    print(f"[TOOL STATS] 重复统计（工具调用次数级别）:")
-    for deg_type in all_degradation_types:
-        if deg_type == 'clean':
-            continue
-        
-        total = degradation_total_count[deg_type]
-        matched = degradation_tool_count_repeat[deg_type]
-        
-        if total > 0:
-            ratio_repeat = matched / total
-            results[f'tool_match/{deg_type}_repeat_ratio'] = ratio_repeat
-            results[f'tool_match/{deg_type}_repeat_count'] = float(matched)
-            results[f'tool_match/{deg_type}_total_count'] = float(total)
-            print(f"[TOOL STATS]   {deg_type}: {matched}/{total} = {ratio_repeat:.3f}")
-        else:
-            results[f'tool_match/{deg_type}_repeat_ratio'] = 0.0
-            results[f'tool_match/{deg_type}_repeat_count'] = 0.0
-            results[f'tool_match/{deg_type}_total_count'] = 0.0
-    
-    print(f"\n[TOOL STATS] 不重复统计（样本级别）:")
+    print(f"\n[TOOL STATS] === 工具-退化匹配统计（批次级别）===")
+    print(f"[TOOL STATS] 不重复统计（只要调用了对应工具就算，样本级别）:")
     for deg_type in all_degradation_types:
         if deg_type == 'clean':
             continue
@@ -400,14 +432,68 @@ def compute_tool_degradation_matching_stats(
         
         if total_samples > 0:
             ratio_unique = matched_samples / total_samples
-            results[f'tool_match/{deg_type}_unique_ratio'] = ratio_unique
-            results[f'tool_match/{deg_type}_unique_matched'] = float(matched_samples)
-            results[f'tool_match/{deg_type}_unique_total'] = float(total_samples)
+            # 批次级别统计：该退化类型在当前批次的工具匹配率
+            results[f'tool_match/unique_ratio/{deg_type}'] = ratio_unique
+            results[f'tool_match/unique_count/{deg_type}'] = float(matched_samples)
+            results[f'tool_match/unique_total/{deg_type}'] = float(total_samples)
             print(f"[TOOL STATS]   {deg_type}: {matched_samples}/{total_samples} = {ratio_unique:.3f}")
         else:
-            results[f'tool_match/{deg_type}_unique_ratio'] = 0.0
-            results[f'tool_match/{deg_type}_unique_matched'] = 0.0
-            results[f'tool_match/{deg_type}_unique_total'] = 0.0
+            results[f'tool_match/unique_ratio/{deg_type}'] = 0.0
+            results[f'tool_match/unique_count/{deg_type}'] = 0.0
+            results[f'tool_match/unique_total/{deg_type}'] = 0.0
+    
+    print(f"\n[TOOL STATS] 重复统计（样本中任何工具被调用≥2次）:")
+    for deg_type in all_degradation_types:
+        if deg_type == 'clean':
+            continue
+        
+        total_samples = degradation_sample_total[deg_type]
+        repeat_matched_samples = degradation_sample_repeat_matched[deg_type]
+        
+        if total_samples > 0:
+            ratio_repeat = repeat_matched_samples / total_samples
+            results[f'tool_match/repeat_ratio/{deg_type}'] = ratio_repeat
+            results[f'tool_match/repeat_count/{deg_type}'] = float(repeat_matched_samples)
+            results[f'tool_match/repeat_total/{deg_type}'] = float(total_samples)
+            print(f"[TOOL STATS]   {deg_type}: {repeat_matched_samples}/{total_samples} = {ratio_repeat:.3f}")
+        else:
+            results[f'tool_match/repeat_ratio/{deg_type}'] = 0.0
+            results[f'tool_match/repeat_count/{deg_type}'] = 0.0
+            results[f'tool_match/repeat_total/{deg_type}'] = 0.0
+    
+    # 【新增】工具数量匹配统计
+    print(f"\n[TOOL STATS] 工具数量匹配统计（样本调用的工具数 vs 退化数量）:")
+    for deg_count_key, stats in tool_count_match_stats.items():
+        deg_num = int(deg_count_key.replace('deg', ''))
+        total = stats['total']
+        
+        if total > 0:
+            less_ratio = stats['less'] / total
+            exact_ratio = stats['exact'] / total
+            more_ratio = stats['more'] / total
+            
+            # 添加到结果（分组统计）
+            results[f'tool_count_match/{deg_count_key}_less_ratio'] = less_ratio
+            results[f'tool_count_match/{deg_count_key}_less_count'] = float(stats['less'])
+            results[f'tool_count_match/{deg_count_key}_exact_ratio'] = exact_ratio
+            results[f'tool_count_match/{deg_count_key}_exact_count'] = float(stats['exact'])
+            results[f'tool_count_match/{deg_count_key}_more_ratio'] = more_ratio
+            results[f'tool_count_match/{deg_count_key}_more_count'] = float(stats['more'])
+            results[f'tool_count_match/{deg_count_key}_total'] = float(total)
+            
+            print(f"[TOOL STATS]   {deg_num}种退化的样本 (共{total}个):")
+            print(f"[TOOL STATS]     少调用: {stats['less']}/{total} = {less_ratio:.3f}")
+            print(f"[TOOL STATS]     刚好: {stats['exact']}/{total} = {exact_ratio:.3f}")
+            print(f"[TOOL STATS]     多调用: {stats['more']}/{total} = {more_ratio:.3f}")
+        else:
+            # 没有该类型样本
+            results[f'tool_count_match/{deg_count_key}_less_ratio'] = 0.0
+            results[f'tool_count_match/{deg_count_key}_less_count'] = 0.0
+            results[f'tool_count_match/{deg_count_key}_exact_ratio'] = 0.0
+            results[f'tool_count_match/{deg_count_key}_exact_count'] = 0.0
+            results[f'tool_count_match/{deg_count_key}_more_ratio'] = 0.0
+            results[f'tool_count_match/{deg_count_key}_more_count'] = 0.0
+            results[f'tool_count_match/{deg_count_key}_total'] = 0.0
     
     print(f"[TOOL STATS] === 统计完成 ===\n")
     
@@ -426,9 +512,16 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
         print(f"[AGENT MODE WARNING] 未知模式 '{conversation_mode}'，使用默认模式 'multi_tool_planning'")
         conversation_mode = 'multi_tool_planning'
     
+    # 读取单轮最大工具数限制
+    max_tools_per_turn = int(os.environ.get('MAX_TOOLS_PER_TURN', '0'))
+    if max_tools_per_turn > 0:
+        print(f"[AGENT MODE] 单轮最大工具数: {max_tools_per_turn} (超过将被截断)")
+    else:
+        print(f"[AGENT MODE] 单轮最大工具数: 无限制")
+    
     # 定义退化类型到工具的映射关系
     DEGRADATION_TO_TOOLS = {
-        'rain': ['mprnet_deraining', 'restormer_deraining', 'xrestormer_deraining'],
+        'rain': ['mprnet_deraining', 'restormer_deraining', 'xrestormer_deraining', 'nerd_deraining'],
         'haze': ['dehazeformer_dehaze'],
         'dark': ['retinexformer_enhance', 'retinexformer_lol_v1', 'retinexformer_lol_v2_real', 
                 'retinexformer_lol_v2_synthetic', 'retinexformer_sdsd_indoor', 'retinexformer_sdsd_outdoor',
@@ -437,7 +530,7 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
         'defocus blur': ['drbnet_defocus_deblurring', 'restormer_defocus_deblurring'],
         'noise': ['swinir_denoising', 'mprnet_denoising', 'scunet_real_denoising_psnr', 'scunet_real_denoising_gan',
                  'scunet_color_denoising', 'scunet_gray_denoising'],
-        'low resolution': ['swinir_super_resolution'],
+        'low resolution': ['swinir_super_resolution', 'hat_super_resolution'],  # 添加HAT工具
         'jpeg compression artifact': ['swinir_jpeg_artifact_removal', 'fbcnn_jpeg_artifact_removal'],
     }
     
@@ -506,7 +599,7 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
     for deg_type in all_degradation_types:
         consecutive_degradation_stats[deg_type] = []  # 每个样本的连续次数
 
-    env = ParallelEnv(config.agent, tokenizer, processor, conversation_mode=conversation_mode)
+    env = ParallelEnv(config.agent, tokenizer, processor, conversation_mode=conversation_mode, max_tools_per_turn=max_tools_per_turn)
     env.reset(prompts, vllm_inputs, n=sampling_params.n)
 
     # interleaving inputs if sampling_params.n > 1
@@ -744,11 +837,21 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
                 continue
 
             # Count tool calls based on whether the action actually contains tool_calls
-            # This is more accurate than just checking 'not done'
+            # Logic differs by conversation mode:
+            # - multi_tool_planning: count number of tools in current turn (overwrite, not accumulate)
+            # - single_tool_iterative: accumulate tool calls across turns
             if parsed_action.get('tool_calls'):
-                # Model generated <tool_call> block, count it
-                tool_call_cnt_list[idx] += 1
-                print(f"[DEBUG TOOL CNT] 样本{idx} 轮次{step + 1}: 工具调用计数 = {tool_call_cnt_list[idx]}")
+                tool_calls = parsed_action['tool_calls']
+                num_tools = len(tool_calls)
+                
+                if conversation_mode == 'multi_tool_planning':
+                    # 多工具模式：用当前轮的工具数量覆盖（统计最后一轮工具链内的工具数）
+                    tool_call_cnt_list[idx] = num_tools
+                    print(f"[DEBUG TOOL CNT] 样本{idx} 轮次{step + 1}: 工具调用计数 = {num_tools} (多工具模式，覆盖)")
+                else:
+                    # 单工具模式：累加每轮的工具调用次数
+                    tool_call_cnt_list[idx] += num_tools
+                    print(f"[DEBUG TOOL CNT] 样本{idx} 轮次{step + 1}: 工具调用计数 = {tool_call_cnt_list[idx]} (单工具模式，累加)")
             elif parsed_action.get('is_done', False):
                 # Model generated <answer> block, no tool call
                 print(f"[DEBUG TOOL CNT] 样本{idx} 轮次{step + 1}: 给出answer，无工具调用")
@@ -820,7 +923,8 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
                 if isinstance(item, dict) and 'degradation_type' in item:  # 注意：字段名是 'degradation_type' 不是 'type'
                     deg_type = item['degradation_type']
                     if deg_type is not None and str(deg_type).strip() and str(deg_type).strip().lower() != 'clean':
-                        degradation_types.append(str(deg_type).strip())
+                        # 统一转换为小写，与DEGRADATION_TO_TOOLS的键匹配
+                        degradation_types.append(str(deg_type).strip().lower())
         
         # 方法2：从env_name提取（备用）
         if not degradation_types and env_name and env_name.strip().lower() != "clean":
@@ -836,7 +940,7 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
             if i < 3:  # 只打印前3个样本，避免日志过多
                 print(f"[TOOL STATS] 样本{idx}: 真实退化类型 {degradation_types} (来源: {'reward_model' if reward_model else 'env_name'})")
     
-    # 计算工具-退化匹配统计
+    # 计算工具-退化匹配统计（批次级别，每个step的统计）
     print(f"[TOOL STATS] 开始计算工具-退化匹配统计...")
     tool_degradation_stats = compute_tool_degradation_matching_stats(
         tool_calls_per_sample=tool_calls_per_sample,
@@ -852,7 +956,13 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
     saved_extra_info_list = env.extra_info_list.copy() if hasattr(env, 'extra_info_list') else []
     saved_conversation_history = env.conversation_history.copy() if hasattr(env, 'conversation_history') else []
     
+    # 为每个extra_info添加对话模式信息（用于奖励计算中的工具多样性bonus）
+    for i, extra_info in enumerate(saved_extra_info_list):
+        if extra_info is not None and isinstance(extra_info, dict):
+            extra_info['conversation_mode'] = conversation_mode
+    
     print(f"[DEBUG EXTRA_INFO] saved_extra_info_list length: {len(saved_extra_info_list)}")
+    print(f"[DEBUG EXTRA_INFO] Added conversation_mode='{conversation_mode}' to all extra_info")
     
     env.close()
     target_device = prompts.batch['input_ids'].device
@@ -905,16 +1015,24 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
     
     repeated_degradation_tensor = torch.tensor(repeated_degradation_cnt_list, dtype=torch.float32).to(target_device).unsqueeze(1)
     
-    # 将工具-退化匹配统计转换为tensor（每个样本都一样的全局统计）
+    # 将工具-退化匹配统计转换为tensor（批次级别，每个step会更新）
     tool_match_tensors = {}
     for key, value in tool_degradation_stats.items():
-        # 创建一个所有样本值都相同的tensor
+        # 该批次的所有样本使用相同的批次统计值
+        # 注意：每个step的batch不同，所以统计值会随step变化
         tool_match_tensors[key] = torch.full(
             (batch_size * sampling_params.n, 1), 
             value, 
             dtype=torch.float32,
             device=target_device
         )
+    
+    # 打印添加的指标键（用于调试）
+    print(f"[DEBUG STATS] tool_degradation_stats 返回了 {len(tool_degradation_stats)} 个指标")
+    tool_count_keys = [k for k in tool_degradation_stats.keys() if k.startswith('tool_count_match/')]
+    print(f"[DEBUG STATS] 其中 tool_count_match/ 指标: {len(tool_count_keys)} 个")
+    if tool_count_keys:
+        print(f"[DEBUG STATS] tool_count_match 指标示例: {tool_count_keys[:3]}")
     
     # 打印详细统计摘要
     print(f"\n[STATS SUMMARY] === 退化类型统计详情 ===")
@@ -1106,7 +1224,7 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
     )
 
 
-def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None, conversation_mode='multi_tool_planning'):
+def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None, conversation_mode='multi_tool_planning', max_tools_per_turn=0):
     action_string = sample.get('action', '')
     tools = sample.get('tools', [])
     parsed_output = sample.get('parsed_output', {})
@@ -1117,6 +1235,12 @@ def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None, convers
 
     # 工具执行开始
     valid_tools = [t for t in tools if t is not None]
+    
+    # 🔥 限制单轮工具数量（避免浪费时间）
+    if max_tools_per_turn > 0 and len(valid_tools) > max_tools_per_turn:
+        print(f'[TOOL LIMIT {turn_info}] 工具数量超限: {len(valid_tools)} > {max_tools_per_turn}，截断到前{max_tools_per_turn}个')
+        tools = tools[:max_tools_per_turn]
+        valid_tools = [t for t in tools if t is not None]
 
     # non-agent data or no tools to execute
     if action_string == '':
@@ -1160,7 +1284,9 @@ def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None, convers
             # print(f'[DEBUG {turn_info}] ', compatible_action_string)
             print(f'[DEBUG {turn_info}] 执行工具{i+1}/{len(tools)}: {tool.name}')
             tool_result, reward, done, info = tool.execute(compatible_action_string)
-            print(f'[DEBUG {turn_info}] 结果: multi_modal_data={tool_result.get("multi_modal_data") is not None}, reward={reward:.3f}, done={done}')
+            # 安全检查：tool_result可能是字符串（错误信息）而不是字典
+            has_multi_modal = isinstance(tool_result, dict) and tool_result.get("multi_modal_data") is not None
+            print(f'[DEBUG {turn_info}] 结果: multi_modal_data={has_multi_modal}, reward={reward:.3f}, done={done}')
             print(f'[DEBUG {turn_info}] 状态: {info.get("status", "unknown")}')
             executed_count += 1
             
@@ -1276,11 +1402,12 @@ class ParallelEnv:
     """
     The interface is designed to be the similar to : https://github.com/openai/gym
     """
-    def __init__(self, env_config, tokenizer, processor, conversation_mode='multi_tool_planning', **kwargs):
+    def __init__(self, env_config, tokenizer, processor, conversation_mode='multi_tool_planning', max_tools_per_turn=0, **kwargs):
         self.config = env_config
         self.tokenizer = tokenizer
         self.processor = processor
         self.conversation_mode = conversation_mode  # 对话模式：multi_tool_planning 或 single_tool_iterative
+        self.max_tools_per_turn = max_tools_per_turn  # 单轮最大工具数（0=无限制）
 
         # type: List[ Dict[ Str, ToolBase subclasses ] ]
         self.tools = []
@@ -1413,7 +1540,7 @@ class ParallelEnv:
                 valid_idx = agi['valid_idx']
                 subidx = agi['idx']
                 
-                obs, reward, done, info = execute_tool_call(agi, self.tokenizer, self.processor, pbar=pbar, conversation_mode=self.conversation_mode)
+                obs, reward, done, info = execute_tool_call(agi, self.tokenizer, self.processor, pbar=pbar, conversation_mode=self.conversation_mode, max_tools_per_turn=self.max_tools_per_turn)
                 
                 # 输出执行结果
                 if info.get('status') == 'success':
@@ -1443,7 +1570,7 @@ class ParallelEnv:
                 reward_list[subidx] = reward
                 done_list[subidx] |= done
         else:
-            partial_tool_func = partial(execute_tool_call, tokenizer=self.tokenizer, processor=self.processor, pbar=pbar, conversation_mode=self.conversation_mode)
+            partial_tool_func = partial(execute_tool_call, tokenizer=self.tokenizer, processor=self.processor, pbar=pbar, conversation_mode=self.conversation_mode, max_tools_per_turn=self.max_tools_per_turn)
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
                 raw_outputs = list(executor.map(partial_tool_func, agent_inputs))
             for agi, raw in zip(agent_inputs, raw_outputs):

@@ -99,10 +99,14 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
         # 增强格式检查配置
         use_enhanced_format = os.environ.get('USE_ENHANCED_FORMAT', 'False').lower() == 'true'
         
+        # 单轮最大工具数限制
+        max_tools_per_turn = int(os.environ.get('MAX_TOOLS_PER_TURN', '0'))
+        
         print(f"[INFO] Image Quality Reward Config: use_no_reference={use_no_reference}, discretize_levels={discretize_levels}")
         print(f"[INFO] Reward Weights: format={format_reward_weight}, quality={quality_reward_weight}")
         print(f"[INFO] Degradation Type Reward Config: enable={enable_degradation_type_reward}, weight={degradation_type_reward_weight}")
         print(f"[INFO] Enhanced Format Check: enabled={use_enhanced_format}")
+        print(f"[INFO] Max Tools Per Turn: {max_tools_per_turn if max_tools_per_turn > 0 else 'unlimited'}")
         
         res = image_restoration.compute_score_v2(
             solution_str, 
@@ -115,6 +119,7 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
             format_reward_weight=format_reward_weight,      # 格式奖励权重
             quality_reward_weight=quality_reward_weight,    # 图像质量奖励权重
             use_enhanced_format=use_enhanced_format,        # 是否使用增强格式检查
+            max_tools_per_turn=max_tools_per_turn,          # 单轮最大工具数限制
         )
         
         # 注意：

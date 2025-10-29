@@ -20,7 +20,9 @@ from .envs.mm_process_engine.SCUNetToolbox import SCUNetRealDenoisingPSNRToolbox
 from .envs.mm_process_engine.RetinexformerToolbox import RetinexformerLOLv1Toolbox, RetinexformerLOLv2RealToolbox, RetinexformerLOLv2SyntheticToolbox,RetinexformerSDSDIndoorToolbox
 from .envs.visual_agent.vl_agent_v2 import VLAgentEnvV2
 from .envs.visual_agent.vl_agent_v3 import VLAgentEnvV3
-
+from .envs.mm_process_engine.HATToolbox import HATSuperResolutionToolbox
+from .envs.mm_process_engine.NeRDToolbox import NeRDDerainingToolbox
+from .envs.mm_process_engine.NAFNetToolbox import NAFNetDeblurToolbox
 try:
     from .envs.visual_agent.mm_search_engine import MMSearchEngine
 except Exception as err:

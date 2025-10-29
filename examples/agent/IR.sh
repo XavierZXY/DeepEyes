@@ -54,7 +54,8 @@ export FORMAT_REWARD_WEIGHT=0.3             # 格式奖励权重（默认0.3）
 export QUALITY_REWARD_WEIGHT=0.7            # 图像质量奖励权重（默认0.7）
 export ENABLE_DEGRADATION_TYPE_REWARD=False # 是否启用退化类型奖励（默认False）
 export DEGRADATION_TYPE_REWARD_WEIGHT=1.0   # 退化类型奖励权重（默认1.0）
-export USE_ENHANCED_FORMAT=True           # 是否使用增强格式检查（默认False）
+export USE_ENHANCED_FORMAT=True             # 是否使用增强格式检查（默认False）
+export MAX_TOOLS_PER_TURN=4                 # 单轮最大工具数（0=无限制，推荐3-5）
 
 # ========== Wandb Upload Configuration ==========
 # 控制wandb上传行为
@@ -86,13 +87,24 @@ export WANDB_LOG_WRONG_PREDICTIONS=False     # 是否上传错误预测的验证
 # 【增强格式检查说明】
 # USE_ENHANCED_FORMAT=True 时，格式检查增加以下约束：
 # - Answer必须在最后一轮对话中（如果存在）
-# - Tool_call总数必须 >= 退化数量（对于非clean样本）
+# - Tool_call总数必须 >= 1（对于非clean样本，确保至少尝试处理）
+# - 单轮工具数必须 <= MAX_TOOLS_PER_TURN（如果设置>0）
 # - 继承所有原有格式检查规则
+# 注：原规则"Tool_call总数>=退化数量"已放宽，代码中保留但已注释
+#
+# 【单轮最大工具数说明】
+# MAX_TOOLS_PER_TURN 控制每轮对话最多可调用的工具数量：
+# - 0: 无限制（默认）
+# - 3-5: 推荐值，适合多工具链式模式，避免工具数过多
+# - 作用：
+#   1. 超过限制的工具不会被执行（节省时间）
+#   2. 超过限制的响应格式奖励为-1.0（引导模型学习约束）
+# - 适用场景：控制计算成本、避免无效工具堆叠、强制模型精简规划
 #
 # 【推荐配置】
-# - 默认训练: FORMAT=0.3, QUALITY=0.7, DEGRADATION_TYPE=关闭, ENHANCED_FORMAT=关闭
-# - 强化类型识别: FORMAT=0.3, QUALITY=0.7, DEGRADATION_TYPE=开启(权重1.0), ENHANCED_FORMAT=关闭
-# - 严格格式训练: FORMAT=0.3, QUALITY=0.7, ENHANCED_FORMAT=开启
+# - 默认训练: FORMAT=0.3, QUALITY=0.7, DEGRADATION_TYPE=关闭, ENHANCED_FORMAT=关闭, MAX_TOOLS=0
+# - 强化类型识别: FORMAT=0.3, QUALITY=0.7, DEGRADATION_TYPE=开启(权重1.0), ENHANCED_FORMAT=关闭, MAX_TOOLS=0
+# - 严格格式训练: FORMAT=0.3, QUALITY=0.7, ENHANCED_FORMAT=开启, MAX_TOOLS=3-5
 # - 通常保持 FORMAT_WEIGHT + QUALITY_WEIGHT = 1.0，退化类型作为额外奖励
 # ==================================================================
 

@@ -1,0 +1,69 @@
+{
+  "tool_name": "drbnet_defocus_deblurring",
+  "display_name": "DRBNet",
+  "degradation_type": "defocus_blur",
+  "baseline": {
+    "high": {
+      "psnr": 24.17745531688083,
+      "ssim": 0.6296021042109232,
+      "lpips": 0.5565598487854004
+    },
+    "low": {
+      "psnr": 28.840266287666974,
+      "ssim": 0.8246264813929288,
+      "lpips": 0.3221807241439819
+    },
+    "medium": {
+      "psnr": 26.055257001260514,
+      "ssim": 0.7186918664828308,
+      "lpips": 0.4547247409820557
+    }
+  },
+  "levels": {
+    "high": {
+      "metrics": {
+        "psnr": 26.7065456831333,
+        "ssim": 0.7824008821428846,
+        "lpips": 0.28529671132564544
+      },
+      "improvement": {
+        "psnr": 10.460531652752735,
+        "ssim": 24.269102169450854,
+        "lpips": 48.73925743147692
+      },
+      "success_rate": 1.0,
+      "num_samples": 10,
+      "success_count": 10
+    },
+    "low": {
+      "metrics": {
+        "psnr": 28.719826022619316,
+        "ssim": 0.870599400944784,
+        "lpips": 0.1657699268311262
+      },
+      "improvement": {
+        "psnr": -0.41761148751654537,
+        "ssim": 5.5749991771061564,
+        "lpips": 48.5475342227352
+      },
+      "success_rate": 1.0,
+      "num_samples": 20,
+      "success_count": 20
+    },
+    "medium": {
+      "metrics": {
+        "psnr": 27.603067742381416,
+        "ssim": 0.8219619179878486,
+        "lpips": 0.23418627232313155
+      },
+      "improvement": {
+        "psnr": 5.940493087617678,
+        "ssim": 14.369169364668865,
+        "lpips": 48.499333505063674
+      },
+      "success_rate": 1.0,
+      "num_samples": 10,
+      "success_count": 10
+    }
+  }
+}

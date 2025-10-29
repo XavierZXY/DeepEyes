@@ -82,6 +82,21 @@ class Tracking(object):
             
             self.logger["wandb"] = wandb
             
+            # 配置 tool_match 指标的分组显示，让所有退化类型在同一张图中
+            try:
+                # 定义 unique_ratio 分组 - 所有退化类型的唯一匹配率在同一张图
+                wandb.define_metric("tool_match/unique_ratio/*", step_metric="train/global_step")
+                # 定义 repeat_ratio 分组 - 所有退化类型的重复匹配率在同一张图
+                wandb.define_metric("tool_match/repeat_ratio/*", step_metric="train/global_step")
+                # 定义样本计数分组（更清晰的命名）
+                wandb.define_metric("tool_match/unique_sample_count/*", step_metric="train/global_step")
+                wandb.define_metric("tool_match/unique_sample_total/*", step_metric="train/global_step")
+                wandb.define_metric("tool_match/repeat_sample_count/*", step_metric="train/global_step")
+                wandb.define_metric("tool_match/repeat_sample_total/*", step_metric="train/global_step")
+                print("[INFO] Configured wandb metric grouping for tool_match metrics")
+            except Exception as e:
+                print(f"[WARNING] Failed to configure wandb metric grouping: {e}")
+            
             # Save config as a yaml file to wandb
             if config is not None:
                 import tempfile

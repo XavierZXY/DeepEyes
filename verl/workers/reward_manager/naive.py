@@ -172,6 +172,10 @@ class NaiveRewardManager:
                     degradation_type_score = score.get("degradation_type_score", 0.0)
                     reward_extra_info['ir_degradation_type_score'].append(degradation_type_score)
                     
+                    # 添加工具多样性bonus（用于统计）
+                    tool_diversity_bonus = score.get("tool_diversity_bonus", 0.0)
+                    reward_extra_info['ir_tool_diversity_bonus'].append(tool_diversity_bonus)
+                    
                     # 添加退化类型信息（用于wandb展示）
                     degradation_type = score.get("degradation_type", "unknown")
                     reward_extra_info['degradation_type'].append(degradation_type)
@@ -185,6 +189,7 @@ class NaiveRewardManager:
                     reward_extra_info['ir_accuracy_score'].append(0.0)
                     reward_extra_info['ir_quality_score'].append(0.0)
                     reward_extra_info['ir_degradation_type_score'].append(0.0)
+                    reward_extra_info['ir_tool_diversity_bonus'].append(0.0)
                     reward_extra_info['degradation_type'].append("unknown")
                     reward_extra_info['degradation_types_all'].append("")  # 为else分支也添加默认值
                 reward_extra_info['ir_degradation_order_score'].append(degradation_score)
@@ -207,6 +212,7 @@ class NaiveRewardManager:
                 reward_extra_info['ir_accuracy_score'].append(0.0)
                 reward_extra_info['ir_quality_score'].append(0.0)
                 reward_extra_info['ir_degradation_type_score'].append(0.0)
+                reward_extra_info['ir_tool_diversity_bonus'].append(0.0)
 
             if isinstance(score, dict):
                 reward = score["score"]

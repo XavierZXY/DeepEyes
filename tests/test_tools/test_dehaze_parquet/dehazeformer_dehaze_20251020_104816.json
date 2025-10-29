@@ -1,0 +1,172 @@
+{
+  "tool_name": "dehazeformer_dehaze",
+  "parquet_path": "/app/xiaominl/datasets/air_sp11np_up3_sample1_nosw/shard-test-000000.parquet",
+  "num_samples": 10,
+  "success_count": 10,
+  "statistics": {
+    "baseline": {
+      "psnr": {
+        "mean": 28.55145066227694,
+        "std": 4.136151062353217
+      },
+      "ssim": {
+        "mean": 0.7587277854214772,
+        "std": 0.23324059708223055
+      },
+      "lpips": {
+        "mean": 0.33748705461621287,
+        "std": 0.29610595921599453
+      }
+    },
+    "restored": {
+      "psnr": {
+        "mean": 19.31890212329566,
+        "std": 4.966180278040016
+      },
+      "ssim": {
+        "mean": 0.6510880241835382,
+        "std": 0.23170410856113768
+      },
+      "lpips": {
+        "mean": 0.40113469660282136,
+        "std": 0.32595541090819863
+      }
+    },
+    "improvement": {
+      "psnr": {
+        "mean": -31.52467269225062,
+        "std": 16.820994348724266
+      },
+      "ssim": {
+        "mean": -14.187489076047687,
+        "std": 13.784024545583414
+      },
+      "lpips": {
+        "mean": -28.834719479453764,
+        "std": 33.58224490226697
+      }
+    }
+  },
+  "detailed_results": [
+    {
+      "sample_idx": 0,
+      "baseline_psnr": 30.55691234472604,
+      "baseline_ssim": 0.8443219536243941,
+      "baseline_lpips": 0.20664644241333008,
+      "restored_psnr": 29.167239788496012,
+      "restored_ssim": 0.8258333650000402,
+      "restored_lpips": 0.1911448985338211,
+      "improve_psnr": -4.547817333611844,
+      "improve_ssim": -2.189755761411686,
+      "improve_lpips": 7.501481128091765
+    },
+    {
+      "sample_idx": 1,
+      "baseline_psnr": 30.539673122155378,
+      "baseline_ssim": 0.8595338526576181,
+      "baseline_lpips": 0.3576921224594116,
+      "restored_psnr": 16.15728744361526,
+      "restored_ssim": 0.7751558960818966,
+      "restored_lpips": 0.43179836869239807,
+      "improve_psnr": -47.09410484196126,
+      "improve_ssim": -9.816711269117645,
+      "improve_lpips": -20.717886019811775
+    },
+    {
+      "sample_idx": 2,
+      "baseline_psnr": 29.104998191960426,
+      "baseline_ssim": 0.8535450904840033,
+      "baseline_lpips": 0.16062404215335846,
+      "restored_psnr": 16.692103773677417,
+      "restored_ssim": 0.7522068756449424,
+      "restored_lpips": 0.2382969707250595,
+      "improve_psnr": -42.64866926434574,
+      "improve_ssim": -11.872625824793511,
+      "improve_lpips": -48.356975413146145
+    },
+    {
+      "sample_idx": 3,
+      "baseline_psnr": 22.073054998937387,
+      "baseline_ssim": 0.5925429838711126,
+      "baseline_lpips": 0.5048661231994629,
+      "restored_psnr": 18.216434175845823,
+      "restored_ssim": 0.5633953428716774,
+      "restored_lpips": 0.5081222057342529,
+      "improve_psnr": -17.472075447994058,
+      "improve_ssim": -4.919076217730611,
+      "improve_lpips": -0.6449397939706134
+    },
+    {
+      "sample_idx": 4,
+      "baseline_psnr": 19.303775528399278,
+      "baseline_ssim": 0.1621427462269056,
+      "baseline_lpips": 1.112779140472412,
+      "restored_psnr": 16.313089139384765,
+      "restored_ssim": 0.1555532591570772,
+      "restored_lpips": 1.1592963933944702,
+      "improve_psnr": -15.492753656478667,
+      "improve_ssim": -4.064003616052577,
+      "improve_lpips": -4.180277220357489
+    },
+    {
+      "sample_idx": 5,
+      "baseline_psnr": 30.773200601559484,
+      "baseline_ssim": 0.9258735914872168,
+      "baseline_lpips": 0.19749200344085693,
+      "restored_psnr": 26.618189389097886,
+      "restored_ssim": 0.874567270651173,
+      "restored_lpips": 0.20091378688812256,
+      "improve_psnr": -13.502044412796751,
+      "improve_ssim": -5.541395856601897,
+      "improve_lpips": -1.7326187327328162
+    },
+    {
+      "sample_idx": 6,
+      "baseline_psnr": 28.444889680095567,
+      "baseline_ssim": 0.6166218863036362,
+      "baseline_lpips": 0.45505020022392273,
+      "restored_psnr": 11.530272063754767,
+      "restored_ssim": 0.2960227623800223,
+      "restored_lpips": 0.7922288775444031,
+      "improve_psnr": -59.46452177023866,
+      "improve_ssim": -51.992822675409364,
+      "improve_lpips": -74.09702866948751
+    },
+    {
+      "sample_idx": 7,
+      "baseline_psnr": 30.280896159245422,
+      "baseline_ssim": 0.80642911079645,
+      "baseline_lpips": 0.2705197334289551,
+      "restored_psnr": 17.717223306510263,
+      "restored_ssim": 0.6453217592204359,
+      "restored_lpips": 0.32927176356315613,
+      "improve_psnr": -41.4904261309294,
+      "improve_ssim": -19.977869030161912,
+      "improve_lpips": -21.718204949226276
+    },
+    {
+      "sample_idx": 8,
+      "baseline_psnr": 31.73211619079085,
+      "baseline_ssim": 0.9591552711657089,
+      "baseline_lpips": 0.03301680088043213,
+      "restored_psnr": 19.028942258968346,
+      "restored_ssim": 0.8140961771583743,
+      "restored_lpips": 0.06644149124622345,
+      "improve_psnr": -40.032545750948564,
+      "improve_ssim": -15.123629965671462,
+      "improve_lpips": -101.23539977975557
+    },
+    {
+      "sample_idx": 9,
+      "baseline_psnr": 32.70498980489958,
+      "baseline_ssim": 0.9671113675977265,
+      "baseline_lpips": 0.07618393748998642,
+      "restored_psnr": 21.74823989360604,
+      "restored_ssim": 0.8087275336697431,
+      "restored_lpips": 0.09383220970630646,
+      "improve_psnr": -33.50176831320123,
+      "improve_ssim": -16.377000543526204,
+      "improve_lpips": -23.165345344141237
+    }
+  ]
+}
