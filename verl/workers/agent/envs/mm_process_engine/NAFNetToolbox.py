@@ -11,6 +11,7 @@ from PIL import Image
 # Assuming ToolBase and PROMPT are correctly imported from your framework
 from ...tool_envs import ToolBase
 from .IRprompt import PROMPT
+from .tool_load_balancer import get_tool_service_ip
 
 # ====================== 公共基类 ======================
 class BaseNAFNetToolbox(ToolBase):
@@ -24,8 +25,12 @@ class BaseNAFNetToolbox(ToolBase):
     task_name: str = ""
     
     user_prompt = PROMPT.USER_PROMPT_V1
-    # 从环境变量读取IP地址，端口号5012
-    api_url = f"http://{os.environ.get('TOOL_SERVICE_IP', '10.21.9.6')}:5012/process"
+    
+    @property
+    def api_url(self):
+        """动态获取API URL，支持负载均衡"""
+        ip = get_tool_service_ip()
+        return f"http://{ip}:5012/process"
 
     def __init__(self, _name=None, _desc=None, _params=None, **kwargs):
         # The 'name' is now a class attribute, so we don't need to pass it here.

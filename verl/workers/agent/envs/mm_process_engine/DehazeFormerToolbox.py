@@ -6,6 +6,7 @@ import os
 from PIL import Image
 from typing import Dict, Any, Tuple
 from .IRprompt import PROMPT
+from .tool_load_balancer import get_tool_service_ip
 # This is a placeholder for the actual ToolBase class.
 # In a real environment, you would import it:
 # from verl.workers.agent.tool_envs import ToolBase
@@ -34,8 +35,8 @@ class DehazeFormerToolbox(ToolBase):
         super().__init__(name=self.name)
         # 从环境变量读取IP地址，保留端口号5002
         if api_url is None:
-            tool_service_ip = os.environ.get('TOOL_SERVICE_IP', '10.21.9.6')
-            api_url = f'http://{tool_service_ip}:5002/dehaze'
+            ip = get_tool_service_ip()
+            api_url = f'http://{ip}:5002/dehaze'
         self.api_url = api_url
         self.multi_modal_data = None
         print(f"DehazeFormerToolbox initialized. API endpoint: {self.api_url}")

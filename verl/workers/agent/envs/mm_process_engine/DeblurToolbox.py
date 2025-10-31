@@ -17,6 +17,7 @@ import io
 #         self.name = name
 from verl.workers.agent.tool_envs import ToolBase
 from .IRprompt import PROMPT
+from .tool_load_balancer import get_tool_service_ip
 
 class DeblurToolbox(ToolBase):
     """
@@ -28,8 +29,9 @@ class DeblurToolbox(ToolBase):
     # 从环境变量读取IP地址，保留端口号5003
     @property
     def server_url(self):
-        tool_service_ip = os.environ.get('TOOL_SERVICE_IP', '10.21.9.6')
-        return f"http://{tool_service_ip}:5003/deblur"
+        """动态获取服务URL，支持负载均衡"""
+        ip = get_tool_service_ip()
+        return f"http://{ip}:5003/deblur"
 
     def __init__(self, _name="deblur_toolbox", _desc="A tool for deblurring images using a remote DRBNet API.", _params={}, **kwargs):
         super().__init__(

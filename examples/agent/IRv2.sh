@@ -25,18 +25,43 @@ export ROCM_USE_GPU_COPY=1
 export WANDB_API_KEY=ce0821ccdf886f2dbb5703772a0c41aa85611afb
 
 # ========== Tool Service IP Configuration ==========
-# 统一配置所有图像处理工具的服务IP地址（端口号由各工具内部保留）
-# 工具及对应端口：
-# - SwinIR: 5001 (去噪/超分/JPEG伪影去除)
-# - DehazeFormer: 5002 (去雾)
-# - DRBNet (DeblurToolbox): 5003 (散焦去模糊)
-# - MPRNet: 5004 (去噪/去雨/运动去模糊)
-# - FBCNN: 5005 (JPEG伪影去除/质量评估)
-# - Restormer: 5006 (运动去模糊/散焦去模糊/去雨)
-# - XRestormer: 5007 (运动去模糊/去雨)
-# - HAT: 5010 (超分辨率)
-# - NAFNet: 5012 (运动去模糊)
-export TOOL_SERVICE_IP=10.21.9.6
+# 【单IP模式】- 传统配置方式
+# export TOOL_SERVICE_IP=10.21.9.6
+
+# 【多IP负载均衡模式】- 推荐用于加速处理
+# 配置多个工具服务器IP，系统将自动进行负载均衡
+# 支持逗号或分号分隔，例如：
+export TOOL_SERVICE_IPS="10.21.9.6,10.21.9.7"
+# export TOOL_SERVICE_IPS="192.168.1.100;192.168.1.101;192.168.1.102"
+
+# 【负载均衡策略】
+# - round_robin: 轮询模式（默认），依次分配请求到各个服务器
+# - random: 随机模式，随机选择服务器
+export TOOL_LOAD_BALANCE_STRATEGY=round_robin
+
+# 【注意事项】
+# 1. TOOL_SERVICE_IPS 优先级高于 TOOL_SERVICE_IP
+# 2. 如果只配置了 TOOL_SERVICE_IP，则自动使用单IP模式
+# 3. 多IP模式要求所有服务器部署了相同的工具服务
+# 4. 各工具对应端口（所有服务器端口必须一致）：
+#    - SwinIR: 5001 (去噪/超分/JPEG伪影去除)
+#    - DehazeFormer: 5002 (去雾)
+#    - DRBNet (DeblurToolbox): 5003 (散焦去模糊)
+#    - MPRNet: 5004 (去噪/去雨/运动去模糊)
+#    - FBCNN: 5005 (JPEG伪影去除/质量评估)
+#    - Restormer: 5006 (运动去模糊/散焦去模糊/去雨)
+#    - XRestormer: 5007 (运动去模糊/去雨)
+#    - HAT: 5010 (超分辨率)
+#    - NAFNet: 5012 (运动去模糊)
+#    - Retinexformer: 5009 (低光增强)
+#    - NeRD: 5011 (去噪)
+#    - SCUNet: 5008 (真实图像去噪)
+
+# 【性能提升】
+# - 单IP: 所有请求排队处理
+# - 2个IP: 理论上可提升约2倍吞吐量
+# - 3个IP: 理论上可提升约3倍吞吐量
+# - N个IP: 理论上可提升约N倍吞吐量（受限于网络带宽和GPU性能）
 # ========================================================
 
 # ========== Image Quality Reward Configuration ==========

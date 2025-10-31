@@ -11,6 +11,7 @@ from PIL import Image
 # Assuming ToolBase and PROMPT are correctly imported from your framework
 from ...tool_envs import ToolBase
 from .IRprompt import PROMPT
+from .tool_load_balancer import get_tool_service_ip
 
 # ====================== 基础类 ======================
 class BaseRetinexformerToolbox(ToolBase):
@@ -25,7 +26,12 @@ class BaseRetinexformerToolbox(ToolBase):
     
     user_prompt = PROMPT.USER_PROMPT_V1
     # 从环境变量读取IP地址，端口号5009
-    api_url = f"http://{os.environ.get('TOOL_SERVICE_IP', '10.21.9.6')}:5009/enhance"
+    
+    @property
+    def api_url(self):
+        """动态获取API URL，支持负载均衡"""
+        ip = get_tool_service_ip()
+        return f"http://{ip}:5009/process"
 
     def __init__(self, _name, _desc, _params, **kwargs):
         super().__init__(name=self.name, **kwargs) 
