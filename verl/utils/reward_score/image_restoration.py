@@ -222,7 +222,7 @@ def check_multiturn_format_v2(response_str: str, is_clean_sample: bool = False) 
     return 1.0
 
 
-def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int = 0, is_clean_sample: bool = False, max_tools_per_turn: int = 0) -> float:
+def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int = 0, is_clean_sample: bool = False, max_tools_per_turn: int = 0, enable_total_tools_upper_limit: bool = False) -> float:
     """
     Enhanced multi-turn format checking with additional constraints.
     
@@ -231,12 +231,15 @@ def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int
     7. Total tool_call count must be >= 1 (for non-clean samples)
        注：原规则"≥退化数量"已放宽，现在只要求至少调用1个工具
     8. Single turn tool_call count must be <= max_tools_per_turn (if max_tools_per_turn > 0)
+    9. Total tool_call count must be <= degradation_count + 1 (if enable_total_tools_upper_limit=True)
+       注：此约束主要用于单工具迭代模式，防止过度调用工具
     
     Args:
         response_str: The model's response string
         degradation_count: Number of degradations in the image (for validation, currently not strictly enforced)
         is_clean_sample: Whether this is a clean image sample
         max_tools_per_turn: Maximum number of tools allowed per turn (0 = no limit)
+        enable_total_tools_upper_limit: Whether to enable total tools upper limit check (default: False)
     
     Returns:
         1.0: Perfect format (all requirements met including new constraints)
@@ -365,7 +368,16 @@ def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int
         if total_tool_calls < 1:
             print(f' [ENHANCED FORMAT] Tool_call数量不足: {total_tool_calls} < 1（至少需要1个工具）')
             return -1.0
-        print(f' [ENHANCED FORMAT] Tool_call数量验证通过: {total_tool_calls} >= 1')
+        print(f' [ENHANCED FORMAT] Tool_call数量下限验证通过: {total_tool_calls} >= 1')
+    
+    # NEW CONSTRAINT 4: Total tool_call count upper limit validation (for non-clean samples in single-tool-iterative mode)
+    # 防止模型过度调用工具：总工具数 <= 退化数量 + 1
+    if enable_total_tools_upper_limit and not is_clean_sample and degradation_count > 0:
+        max_allowed_tools = degradation_count + 1
+        if total_tool_calls > max_allowed_tools:
+            print(f' [ENHANCED FORMAT] Tool_call数量超过上限: {total_tool_calls} > {max_allowed_tools}（退化数量{degradation_count}+1）')
+            return -1.0
+        print(f' [ENHANCED FORMAT] Tool_call数量上限验证通过: {total_tool_calls} <= {max_allowed_tools}（退化数量{degradation_count}+1）')
     
     # 【原规则保留，可恢复】注释掉的是原来的严格规则：总工具数≥退化数量
     # if not is_clean_sample and degradation_count > 0:
@@ -1398,7 +1410,8 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
                      format_reward_weight: float = 0.3,
                      quality_reward_weight: float = 0.7,
                      use_enhanced_format: bool = False,
-                     max_tools_per_turn: int = 0) -> float:
+                     max_tools_per_turn: int = 0,
+                     enable_total_tools_upper_limit: bool = False) -> float:
     """
     Compute reward score for image restoration task (v2 format).
     
@@ -1428,6 +1441,11 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
                            - >0: 每轮最多允许调用的工具数量，超过则格式违规（-1.0）
                            - 0: 不限制单轮工具数量
                            - 只在use_enhanced_format=True时生效
+        enable_total_tools_upper_limit: 是否启用总工具调用数上限检查（默认False）
+                           - True: 总工具数必须 <= 退化数量+1（防止过度调用工具）
+                           - False: 不限制总工具数上限
+                           - 只在use_enhanced_format=True且非clean样本时生效
+                           - 主要用于单工具迭代模式
     
     奖励结构说明:
         默认奖励 = FORMAT_WEIGHT × format_score + QUALITY_WEIGHT × quality_score
@@ -1502,7 +1520,8 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
                 solution_str, 
                 degradation_count=degradation_count, 
                 is_clean_sample=is_clean_sample,
-                max_tools_per_turn=max_tools_per_turn
+                max_tools_per_turn=max_tools_per_turn,
+                enable_total_tools_upper_limit=enable_total_tools_upper_limit
             )
         else:
             # Use standard multi-turn format checking for strict mode (已经内置了clean/non-clean判断)

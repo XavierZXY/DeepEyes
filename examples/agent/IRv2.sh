@@ -14,7 +14,7 @@ set -xmain_ppo
 PROJECT_NAME="IRagentv2"
 # EXPERIMENT_NAME="debug_for_TIR_IR_air_refrew_bs128_n8_classreward_balanced_mi300"
 # EXPERIMENT_NAME="debug_for_TIR_IR_air_refrew_bs32_n8_balanced_lr1e-7_mi300"
-EXPERIMENT_NAME="debug_for_AIR_singledeg_plan_ref_bs64_n4_spfull_lr1e-6_datarand_mi300"
+EXPERIMENT_NAME="debug_for_AIR_singledeg_plan_ref_bs32_n4_sp17_lr1e-6_mi300"
 # export CUDA_VISIBLE_DEVICES=4,5,6,7
 export SAVE_CHECKPOINT_DIR=/app/model/verl_checkpoints
 # export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
@@ -88,9 +88,10 @@ export FORMAT_REWARD_WEIGHT=0.3             # 格式奖励权重（默认0.3）
 export QUALITY_REWARD_WEIGHT=0.7            # 图像质量奖励权重（默认0.7）
 export ENABLE_DEGRADATION_TYPE_REWARD=False # 是否启用退化类型奖励（默认False）
 export DEGRADATION_TYPE_REWARD_WEIGHT=1.0   # 退化类型奖励权重（默认1.0）
-export USE_ENHANCED_FORMAT=False            # 是否使用增强格式检查v3（默认False）
+export USE_ENHANCED_FORMAT=True            # 是否使用增强格式检查v3（默认False）
 export USE_SINGLE_TURN_FORMAT=True          # 是否使用单轮格式检查（默认False，单轮对话设为True）
-export MAX_TOOLS_PER_TURN=4                 # 单轮最大工具数（0=无限制，IRv2单轮模式建议0）
+export MAX_TOOLS_PER_TURN=1                 # 单轮最大工具数（0=无限制，单工具迭代模式建议1）
+export ENABLE_TOTAL_TOOLS_UPPER_LIMIT=True  # 是否启用总工具数上限检查（默认False，单工具迭代模式建议True）
 
 # ========== Wandb Upload Configuration ==========
 # 控制wandb上传行为
@@ -135,8 +136,10 @@ export WANDB_LOG_WRONG_PREDICTIONS=False     # 是否上传错误预测的验证
 # 3. 增强多轮格式检查 (USE_ENHANCED_FORMAT=True)：
 #    - 继承标准多轮检查的所有规则
 #    - Answer必须在最后一轮（如果存在）
-#    - Tool_call总数必须 >= 退化数量（非clean样本）
-#    - 适用于：需要严格控制对话结构的场景
+#    - Tool_call总数必须 >= 1（非clean样本）
+#    - MAX_TOOLS_PER_TURN>0: 单轮工具数 <= 设定值（例如：单工具迭代模式设为1）
+#    - ENABLE_TOTAL_TOOLS_UPPER_LIMIT=True: 总工具数 <= 退化数量+1（防止过度调用）
+#    - 适用于：需要严格控制对话结构的场景（推荐单工具迭代模式使用）
 #
 # 【优先级】
 # USE_SINGLE_TURN_FORMAT > USE_ENHANCED_FORMAT
@@ -155,7 +158,9 @@ export WANDB_LOG_WRONG_PREDICTIONS=False     # 是否上传错误预测的验证
 #
 # Mode: single_tool_iterative + max_turns>1
 #   → AGENT_CONVERSATION_MODE=single_tool_iterative
-#   → SINGLE_TURN=False, ENHANCED=False
+#   → SINGLE_TURN=False, ENHANCED=True
+#   → MAX_TOOLS_PER_TURN=1 (强制每轮只能1个工具)
+#   → ENABLE_TOTAL_TOOLS_UPPER_LIMIT=True (防止过度调用工具)
 #   → max_turns=3-8 (每轮一个工具，需要足够轮次)
 #
 # 【当前配置建议】
@@ -233,7 +238,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     algorithm.kl_ctrl.kl_coef=0.0 \
     actor_rollout_ref.model.path=${REF_MODEL_PATH} \
     actor_rollout_ref.model.use_remove_padding=True \
-    actor_rollout_ref.actor.optim.lr=2e-6 \
+    actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.actor.ppo_mini_batch_size=32 \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=8 \
     actor_rollout_ref.actor.use_kl_loss=False \
@@ -273,4 +278,4 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     trainer.default_local_dir=${SAVE_CHECKPOINT_DIR}/${PROJECT_NAME}/${EXPERIMENT_NAME} \
     +trainer.tensorboard_dir=${SAVE_CHECKPOINT_DIR}/logs/tensorboard \
     +trainer.rl_logging_board_dir=${SAVE_CHECKPOINT_DIR}/logs/rl_logging_board \
-    trainer.total_epochs=32 2>&1 | tee ./logs/${EXPERIMENT_NAME}.log
+    trainer.total_epochs=10 2>&1 | tee ./logs/${EXPERIMENT_NAME}.log
