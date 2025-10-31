@@ -1055,6 +1055,105 @@ def compute_image_quality_reward_v2(solution_str: str, extra_info: Dict = None,
         return 0.0
 
 
+def compute_intermediate_image_quality_reward(image_history: List, include_last: bool = False) -> float:
+    """
+    计算中间被工具处理的图片的无参考质量奖励
+    
+    Args:
+        image_history: 图像历史列表，包含原始图和所有工具处理后的图像
+        include_last: 是否包含最后一张图像（默认False，最后一张用于主质量奖励）
+    
+    Returns:
+        归一化的中间图像质量奖励，范围[0, 1]
+        
+    逻辑说明：
+        - image_history[0]: 原始退化图（不计入）
+        - image_history[1:-1]: 中间工具处理的图像（计入中间奖励）
+        - image_history[-1]: 最后工具处理的图像（通常不计入，除非include_last=True）
+        - 特殊情况：如果只有一个工具（len(image_history)==2），则该图像既算主奖励也算中间奖励
+    """
+    if not HAS_IMAGE_QUALITY:
+        print("[WARNING INTERMEDIATE] Image quality metrics not available")
+        return 0.0
+    
+    if not image_history or len(image_history) < 2:
+        print("[DEBUG INTERMEDIATE] No intermediate images to evaluate")
+        return 0.0
+    
+    # 确定要评估的图像范围
+    # image_history[0] 是原始退化图，跳过
+    # 从 image_history[1] 开始是第一个工具处理后的图像
+    start_idx = 1
+    
+    if include_last:
+        # 包含最后一张：评估所有工具处理后的图像
+        end_idx = len(image_history)
+    else:
+        # 不包含最后一张：只评估中间的图像
+        end_idx = len(image_history) - 1
+    
+    # 特殊情况：只有一个工具（len=2: 原图+结果图）
+    # 这种情况下，结果图既算主奖励也算中间奖励
+    if len(image_history) == 2:
+        end_idx = len(image_history)  # 包含唯一的工具处理结果
+        print("[DEBUG INTERMEDIATE] 只有一个工具，结果图既算主奖励也算中间奖励")
+    
+    intermediate_images = image_history[start_idx:end_idx]
+    
+    if not intermediate_images:
+        print(f"[DEBUG INTERMEDIATE] No intermediate images (history_len={len(image_history)}, range=[{start_idx}:{end_idx}])")
+        return 0.0
+    
+    print(f"[DEBUG INTERMEDIATE] 评估中间图像: 总历史长度={len(image_history)}, 评估范围=[{start_idx}:{end_idx}], 数量={len(intermediate_images)}")
+    
+    # 计算每个中间图像的无参考质量分数
+    intermediate_scores = []
+    
+    from .image_quality_metrics import get_image_quality_metrics, compute_no_reference_image_restoration_reward
+    from PIL import Image
+    import io
+    
+    for idx, img_data in enumerate(intermediate_images):
+        try:
+            # 提取图像
+            img_raw = extract_image_from_multimodal_data(img_data)
+            
+            if img_raw is None:
+                print(f"[WARNING INTERMEDIATE] 第{idx+1}个中间图像提取失败")
+                continue
+            
+            # 转换为PIL.Image
+            if isinstance(img_raw, bytes):
+                img_pil = Image.open(io.BytesIO(img_raw))
+            elif hasattr(img_raw, 'size'):
+                img_pil = img_raw
+            else:
+                print(f"[WARNING INTERMEDIATE] 第{idx+1}个中间图像格式不支持: {type(img_raw)}")
+                continue
+            
+            # 计算无参考质量分数
+            score = compute_no_reference_image_restoration_reward(img_pil)
+            intermediate_scores.append(score)
+            
+            print(f"[DEBUG INTERMEDIATE] 第{idx+1}/{len(intermediate_images)}个中间图像质量={score:.4f}")
+            
+        except Exception as e:
+            print(f"[WARNING INTERMEDIATE] 第{idx+1}个中间图像评估失败: {e}")
+            continue
+    
+    if not intermediate_scores:
+        print("[WARNING INTERMEDIATE] 所有中间图像评估都失败")
+        return 0.0
+    
+    # 求和并归一化
+    total_score = sum(intermediate_scores)
+    normalized_score = total_score / len(intermediate_scores)  # 平均分
+    
+    print(f"[DEBUG INTERMEDIATE] 中间图像奖励: 总分={total_score:.4f}, 平均分={normalized_score:.4f} (评估了{len(intermediate_scores)}/{len(intermediate_images)}张)")
+    
+    return max(0.0, min(1.0, normalized_score))
+
+
 def merge_consecutive_duplicates_v2(restoration_log: List[str]) -> List[str]:
     """
     Merge consecutive duplicate degradation types (same as v1).
@@ -1411,7 +1510,9 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
                      quality_reward_weight: float = 0.7,
                      use_enhanced_format: bool = False,
                      max_tools_per_turn: int = 0,
-                     enable_total_tools_upper_limit: bool = False) -> float:
+                     enable_total_tools_upper_limit: bool = False,
+                     enable_intermediate_reward: bool = False,
+                     intermediate_reward_weight: float = 0.5) -> float:
     """
     Compute reward score for image restoration task (v2 format).
     
@@ -1446,6 +1547,13 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
                            - False: 不限制总工具数上限
                            - 只在use_enhanced_format=True且非clean样本时生效
                            - 主要用于单工具迭代模式
+        enable_intermediate_reward: 是否启用中间图像质量奖励（默认False）
+                           - True: 计算所有中间工具处理图像的无参考质量奖励
+                           - False: 只计算最终图像质量
+                           - 中间奖励鼓励模型在多步处理中保持每一步的质量
+        intermediate_reward_weight: 中间图像质量奖励的权重系数（默认0.5）
+                           - 控制中间奖励在总奖励中的占比
+                           - 只在enable_intermediate_reward=True时生效
     
     奖励结构说明:
         默认奖励 = FORMAT_WEIGHT × format_score + QUALITY_WEIGHT × quality_score
@@ -1453,6 +1561,15 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
             total = FORMAT_WEIGHT × format_score 
                   + QUALITY_WEIGHT × quality_score 
                   + DEGRADATION_TYPE_WEIGHT × degradation_type_score
+        如果启用中间图像质量奖励:
+            total = FORMAT_WEIGHT × format_score 
+                  + QUALITY_WEIGHT × quality_score 
+                  + INTERMEDIATE_WEIGHT × intermediate_quality_score
+        如果全部启用:
+            total = FORMAT_WEIGHT × format_score 
+                  + QUALITY_WEIGHT × quality_score 
+                  + DEGRADATION_TYPE_WEIGHT × degradation_type_score
+                  + INTERMEDIATE_WEIGHT × intermediate_quality_score
     
     Returns:
         Float score (can be negative due to format violations)
@@ -1641,6 +1758,29 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
     
     print(f' [DEBUG image_restoration_v2] total_score={total_score:.3f} (包含退化类型奖励)' if enable_degradation_type_reward and format_score > 0 else f' [DEBUG image_restoration_v2] total_score={total_score:.3f}')
     
+    # 计算中间图像质量奖励（只有格式正确且非clean样本时才给）
+    intermediate_quality_score = 0.0
+    if enable_intermediate_reward and format_score > 0 and not is_clean_sample:
+        # 从extra_info获取图像历史
+        if extra_info is not None and 'image_history' in extra_info:
+            image_history = extra_info.get('image_history', [])
+            if len(image_history) >= 2:
+                # 计算中间图像质量奖励
+                intermediate_quality_score = compute_intermediate_image_quality_reward(image_history, include_last=False)
+                intermediate_contribution = intermediate_reward_weight * intermediate_quality_score
+                
+                total_score += intermediate_contribution
+                print(f' [DEBUG intermediate_reward] enabled, intermediate_quality_score={intermediate_quality_score:.3f}, weight={intermediate_reward_weight:.1f}, contribution={intermediate_contribution:.3f}')
+                print(f' [DEBUG intermediate_reward] new total_score={total_score:.3f} (包含中间图像质量奖励)')
+            else:
+                print(f' [DEBUG intermediate_reward] 图像历史不足，跳过中间奖励计算 (history_len={len(image_history)})')
+        else:
+            print(f' [DEBUG intermediate_reward] extra_info中没有image_history，跳过中间奖励计算')
+    elif enable_intermediate_reward and is_clean_sample:
+        print(f' [DEBUG intermediate_reward] clean样本跳过中间奖励计算')
+    elif enable_intermediate_reward and format_score <= 0:
+        print(f' [DEBUG intermediate_reward] 格式错误，跳过中间奖励计算')
+    
     # 计算工具多样性bonus（只有格式正确且非clean样本时才给）
     tool_diversity_bonus = 0.0
     if format_score > 0 and not is_clean_sample:
@@ -1661,10 +1801,11 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
     
     # 返回包含各项分数的字典（用于监控）
     result_dict = {
-        "score": total_score,                           # 总分（格式+质量+可选的退化类型+工具多样性bonus）
+        "score": total_score,                           # 总分（格式+质量+可选的退化类型+中间奖励+工具多样性bonus）
         "format_score": format_score,                   # 格式分数（1.0或-1.0）
         "quality_score": quality_score,                 # 图像质量分数（0.0~1.0）
         "degradation_type_score": degradation_type_score,  # 退化类型分数（0.0~1.0，仅在启用时计算）
+        "intermediate_quality_score": intermediate_quality_score,  # 中间图像质量分数（0.0~1.0，仅在启用时计算）
         "tool_diversity_bonus": tool_diversity_bonus,   # 工具多样性bonus（0.0或0.1）
         # 保留旧字段以兼容
         "accuracy_score": quality_score,                # 兼容旧代码，实际是图像质量分数

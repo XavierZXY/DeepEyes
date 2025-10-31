@@ -92,6 +92,8 @@ export USE_ENHANCED_FORMAT=True            # 是否使用增强格式检查v3（
 export USE_SINGLE_TURN_FORMAT=True          # 是否使用单轮格式检查（默认False，单轮对话设为True）
 export MAX_TOOLS_PER_TURN=1                 # 单轮最大工具数（0=无限制，单工具迭代模式建议1）
 export ENABLE_TOTAL_TOOLS_UPPER_LIMIT=True  # 是否启用总工具数上限检查（默认False，单工具迭代模式建议True）
+export ENABLE_INTERMEDIATE_REWARD=True      # 是否启用中间图像质量奖励（默认False）
+export INTERMEDIATE_REWARD_WEIGHT=0.5       # 中间图像质量奖励权重（默认0.5）
 
 # ========== Wandb Upload Configuration ==========
 # 控制wandb上传行为
@@ -115,10 +117,44 @@ export WANDB_LOG_WRONG_PREDICTIONS=False     # 是否上传错误预测的验证
 #              + QUALITY_WEIGHT × quality_score 
 #              + DEGRADATION_TYPE_WEIGHT × degradation_type_score
 #
+# 【启用中间图像质量奖励后】（推荐用于多步处理场景）
+# total_reward = FORMAT_WEIGHT × format_score 
+#              + QUALITY_WEIGHT × quality_score 
+#              + INTERMEDIATE_WEIGHT × intermediate_quality_score
+#
+# 【全部启用】
+# total_reward = FORMAT_WEIGHT × format_score 
+#              + QUALITY_WEIGHT × quality_score 
+#              + DEGRADATION_TYPE_WEIGHT × degradation_type_score
+#              + INTERMEDIATE_WEIGHT × intermediate_quality_score
+#
 # 【各项说明】
 # - format_score: 1.0(完美格式) 或 -1.0(格式违规)
-# - quality_score: 0.0~1.0 (图像质量分数，SSIM/LPIPS/PSNR或NIQE/BRISQUE/CPBD等)
+# - quality_score: 0.0~1.0 (最终图像质量分数，SSIM/LPIPS/PSNR或NIQE/BRISQUE/CPBD等)
 # - degradation_type_score: 0.0~1.0 (退化类型识别准确性，不考虑顺序，只看集合匹配)
+# - intermediate_quality_score: 0.0~1.0 (中间处理图像的平均质量，使用无参考指标)
+#
+# 【中间图像质量奖励说明】(ENABLE_INTERMEDIATE_REWARD=True)
+# 此奖励鼓励模型在多步处理中保持每一步的质量，防止中间步骤降低图像质量
+#
+# 计算逻辑：
+# 1. 提取所有中间工具处理后的图像（不包括最后一张，最后一张用于主质量奖励）
+# 2. 对每个中间图像计算无参考质量指标（NIQE, BRISQUE, CPBD, CLIP-IQA, Hyper-IQA）
+# 3. 求平均分作为中间质量奖励
+# 4. 特殊情况：只有1个工具时，该图像既算主奖励也算中间奖励
+#
+# 示例场景：
+# - 3个工具处理：原图 → 工具1 → 工具2 → 工具3 → 结果
+#   * 中间奖励：评估工具1和工具2的输出
+#   * 主质量奖励：评估工具3的输出（最终结果）
+# - 1个工具处理：原图 → 工具1 → 结果
+#   * 中间奖励：评估工具1的输出
+#   * 主质量奖励：也评估工具1的输出
+#
+# 权重建议：
+# - INTERMEDIATE_WEIGHT=0.5: 既关注中间质量，也重视最终质量
+# - FORMAT_WEIGHT=0.3, QUALITY_WEIGHT=0.7, INTERMEDIATE_WEIGHT=0.5
+#   总权重=1.5（允许超过1.0，鼓励全面优化）
 #
 # 【格式检查说明】
 # 1. 单轮格式检查 (USE_SINGLE_TURN_FORMAT=True)：
