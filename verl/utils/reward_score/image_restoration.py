@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import re
 import json
 import numpy as np
@@ -222,7 +223,7 @@ def check_multiturn_format_v2(response_str: str, is_clean_sample: bool = False) 
     return 1.0
 
 
-def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int = 0, is_clean_sample: bool = False, max_tools_per_turn: int = 0, enable_total_tools_upper_limit: bool = False) -> float:
+def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int = 0, is_clean_sample: bool = False, max_tools_per_turn: int = 0, enable_total_tools_upper_limit: bool = False, conversation_mode: str = 'multi_tool_planning') -> float:
     """
     Enhanced multi-turn format checking with additional constraints.
     
@@ -233,6 +234,7 @@ def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int
     8. Single turn tool_call count must be <= max_tools_per_turn (if max_tools_per_turn > 0)
     9. Total tool_call count must be <= degradation_count + 1 (if enable_total_tools_upper_limit=True)
        注：此约束主要用于单工具迭代模式，防止过度调用工具
+    10. **NEW** For single_tool_iterative mode: Each turn MUST have exactly 1 tool (严格限制)
     
     Args:
         response_str: The model's response string
@@ -240,6 +242,7 @@ def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int
         is_clean_sample: Whether this is a clean image sample
         max_tools_per_turn: Maximum number of tools allowed per turn (0 = no limit)
         enable_total_tools_upper_limit: Whether to enable total tools upper limit check (default: False)
+        conversation_mode: Conversation mode ('multi_tool_planning' or 'single_tool_iterative')
     
     Returns:
         1.0: Perfect format (all requirements met including new constraints)
@@ -310,6 +313,14 @@ def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int
                 
                 # NEW CONSTRAINT 3: Check single turn tool count limit
                 turn_tool_count = len(tool_calls)
+                
+                # STRICT CHECK for single_tool_iterative mode: MUST have exactly 1 tool per turn
+                if conversation_mode == 'single_tool_iterative':
+                    if turn_tool_count != 1:
+                        print(f' [ENHANCED FORMAT] 单工具迭代模式下，第{i+1}轮必须恰好1个工具，但检测到{turn_tool_count}个工具（严格限制）')
+                        return -1.0
+                
+                # General check: max_tools_per_turn limit (applies to all modes if set)
                 if max_tools_per_turn > 0 and turn_tool_count > max_tools_per_turn:
                     print(f' [ENHANCED FORMAT] 第{i+1}轮工具数量超限: {turn_tool_count} > {max_tools_per_turn}（单轮最大工具数）')
                     return -1.0
@@ -388,6 +399,194 @@ def check_multiturn_format_v3_enhanced(response_str: str, degradation_count: int
     
     # All checks passed (including enhanced constraints)
     print(f' [ENHANCED FORMAT] 所有检查通过: 轮次={len(turns)}, tool_calls={total_tool_calls}, answer_turns={answer_turns}')
+    return 1.0
+
+
+def check_multiturn_format_progressive(response_str: str, degradation_count: int = 0, is_clean_sample: bool = False, max_tools_per_turn: int = 0, enable_total_tools_upper_limit: bool = False, conversation_mode: str = 'multi_tool_planning') -> float:
+    """
+    Progressive (gradual/step-by-step) format checking for multi-turn conversation.
+    
+    适用场景：模型刚开始训练，还不太会遵循格式指令时使用。
+    通过阶梯式奖励逐步引导模型学习正确格式。
+    
+    阶梯式奖励等级：
+    - Level 0 (0.0): 完全无格式或格式严重错误
+    - Level 1 (0.2): 至少有<think>块（内容≥10字符）
+    - Level 2 (0.4): 有<think> + 至少有<tool_call>或<answer>之一
+    - Level 3 (0.6): 有<think> + 正确的JSON格式（可解析）
+    - Level 4 (0.8): 有<think> + 正确JSON + 工具名称在允许列表中
+    - Level 5 (1.0): 完全符合所有格式规范
+    
+    Args:
+        response_str: The model's response string
+        degradation_count: Number of degradations in the image
+        is_clean_sample: Whether this is a clean image sample
+        max_tools_per_turn: Maximum number of tools allowed per turn (0 = no limit)
+        enable_total_tools_upper_limit: Whether to enable total tools upper limit check
+        conversation_mode: Conversation mode ('multi_tool_planning' or 'single_tool_iterative')
+    
+    Returns:
+        Score between 0.0 and 1.0 based on format compliance level
+    """
+    allowed_tools = ALLOWED_TOOLS
+    current_score = 0.0
+    
+    # Split response into turns
+    think_pattern = r'<think>(.*?)</think>'
+    think_matches = list(re.finditer(think_pattern, response_str, re.DOTALL))
+    
+    if not think_matches:
+        print(f' [PROGRESSIVE FORMAT] Level 0: 缺少think块，score=0.0')
+        return 0.0
+    
+    turns = []
+    for i, think_match in enumerate(think_matches):
+        start_pos = think_match.start()
+        end_pos = think_matches[i + 1].start() if i + 1 < len(think_matches) else len(response_str)
+        turn_content = response_str[start_pos:end_pos]
+        turns.append(turn_content)
+    
+    if not turns:
+        print(f' [PROGRESSIVE FORMAT] Level 0: 没有有效的回合，score=0.0')
+        return 0.0
+    
+    # Level 1 (0.2): 至少有<think>块且内容有意义
+    valid_think_count = 0
+    for i, turn in enumerate(turns):
+        think_match = re.search(r'<think>(.*?)</think>', turn, re.DOTALL)
+        if think_match:
+            think_content = think_match.group(1).strip()
+            if len(think_content) >= 10:
+                valid_think_count += 1
+    
+    if valid_think_count > 0:
+        current_score = 0.2
+        print(f' [PROGRESSIVE FORMAT] Level 1: 有{valid_think_count}个有效think块，score=0.2')
+    else:
+        print(f' [PROGRESSIVE FORMAT] Level 0: think块内容太短，score=0.0')
+        return 0.0
+    
+    # Level 2 (0.4): 至少有<tool_call>或<answer>
+    has_tool_call = bool(re.search(r'<tool_call>\s*(\[.*?\])\s*</tool_call>', response_str, re.DOTALL))
+    has_answer = bool(re.search(r'<answer>\s*(\{.*?\})\s*</answer>', response_str, re.DOTALL))
+    
+    if not has_tool_call and not has_answer:
+        print(f' [PROGRESSIVE FORMAT] Level 1: 缺少tool_call和answer，score=0.2')
+        return current_score
+    
+    current_score = 0.4
+    print(f' [PROGRESSIVE FORMAT] Level 2: 有tool_call或answer，score=0.4')
+    
+    # Level 3 (0.6): JSON格式正确
+    total_tool_calls = 0
+    valid_json_count = 0
+    tool_calls_list = []
+    answer_turns = []
+    
+    for i, turn in enumerate(turns):
+        tool_call_match = re.search(r'<tool_call>\s*(\[.*?\])\s*</tool_call>', turn, re.DOTALL)
+        answer_match = re.search(r'<answer>\s*(\{.*?\})\s*</answer>', turn, re.DOTALL)
+        
+        # Check if both exist in same turn (format violation but don't penalize too much)
+        if tool_call_match and answer_match:
+            print(f' [PROGRESSIVE FORMAT] Level 2: 第{i+1}轮同时有tool_call和answer（提示：应二选一），score=0.4')
+            return 0.4
+        
+        # Try to parse tool_call
+        if tool_call_match:
+            try:
+                tool_calls = json.loads(tool_call_match.group(1))
+                if isinstance(tool_calls, list) and len(tool_calls) > 0:
+                    valid_json_count += 1
+                    total_tool_calls += len(tool_calls)
+                    tool_calls_list.extend(tool_calls)
+            except json.JSONDecodeError:
+                print(f' [PROGRESSIVE FORMAT] Level 2: 第{i+1}轮tool_call JSON解析失败，score=0.4')
+                return 0.4
+        
+        # Try to parse answer
+        if answer_match:
+            answer_turns.append(i + 1)
+            try:
+                answer_json = json.loads(answer_match.group(1))
+                if 'restoration_log' in answer_json and isinstance(answer_json['restoration_log'], list):
+                    valid_json_count += 1
+            except json.JSONDecodeError:
+                print(f' [PROGRESSIVE FORMAT] Level 2: 第{i+1}轮answer JSON解析失败，score=0.4')
+                return 0.4
+    
+    if valid_json_count == 0:
+        print(f' [PROGRESSIVE FORMAT] Level 2: 所有JSON都解析失败，score=0.4')
+        return 0.4
+    
+    current_score = 0.6
+    print(f' [PROGRESSIVE FORMAT] Level 3: JSON格式正确（{valid_json_count}个有效），score=0.6')
+    
+    # Level 4 (0.8): 工具名称在允许列表中
+    if tool_calls_list:
+        invalid_tools = []
+        for tool_call in tool_calls_list:
+            if isinstance(tool_call, dict) and 'name' in tool_call:
+                if tool_call['name'] not in allowed_tools:
+                    invalid_tools.append(tool_call['name'])
+        
+        if invalid_tools:
+            print(f' [PROGRESSIVE FORMAT] Level 3: 使用了未允许的工具: {invalid_tools}，score=0.6')
+            return 0.6
+    
+    current_score = 0.8
+    print(f' [PROGRESSIVE FORMAT] Level 4: 工具名称合法，score=0.8')
+    
+    # Level 5 (1.0): 完全符合格式规范
+    format_violations = []
+    
+    # Check: answer必须在最后一轮
+    if answer_turns and len(answer_turns) > 1:
+        format_violations.append(f'answer出现在多个轮次: {answer_turns}')
+    elif answer_turns and answer_turns[0] != len(turns):
+        format_violations.append(f'answer应在最后一轮（第{len(turns)}轮）但在第{answer_turns[0]}轮')
+    
+    # Check: 单工具模式每轮只能1个工具
+    if conversation_mode == 'single_tool_iterative':
+        for i, turn in enumerate(turns):
+            tool_call_match = re.search(r'<tool_call>\s*(\[.*?\])\s*</tool_call>', turn, re.DOTALL)
+            if tool_call_match:
+                try:
+                    tool_calls = json.loads(tool_call_match.group(1))
+                    if isinstance(tool_calls, list) and len(tool_calls) != 1:
+                        format_violations.append(f'第{i+1}轮有{len(tool_calls)}个工具（单工具模式应为1个）')
+                except:
+                    pass
+    
+    # Check: max_tools_per_turn限制
+    if max_tools_per_turn > 0:
+        for i, turn in enumerate(turns):
+            tool_call_match = re.search(r'<tool_call>\s*(\[.*?\])\s*</tool_call>', turn, re.DOTALL)
+            if tool_call_match:
+                try:
+                    tool_calls = json.loads(tool_call_match.group(1))
+                    if isinstance(tool_calls, list) and len(tool_calls) > max_tools_per_turn:
+                        format_violations.append(f'第{i+1}轮工具数{len(tool_calls)} > 上限{max_tools_per_turn}')
+                except:
+                    pass
+    
+    # Check: 非clean样本至少要有1个工具
+    if not is_clean_sample and total_tool_calls < 1 and not answer_turns:
+        format_violations.append(f'非clean样本但没有工具调用')
+    
+    # Check: 总工具数上限
+    if enable_total_tools_upper_limit and not is_clean_sample and degradation_count > 0:
+        max_allowed_tools = degradation_count + 1
+        if total_tool_calls > max_allowed_tools:
+            format_violations.append(f'工具数{total_tool_calls} > 上限{max_allowed_tools}')
+    
+    if format_violations:
+        print(f' [PROGRESSIVE FORMAT] Level 4: 格式小问题: {"; ".join(format_violations)[:100]}..., score=0.8')
+        return 0.8
+    
+    # All checks passed!
+    current_score = 1.0
+    print(f' [PROGRESSIVE FORMAT] Level 5: 完全符合格式规范，score=1.0')
     return 1.0
 
 
@@ -1629,22 +1828,53 @@ def compute_score_v2(solution_str: str, ground_truth: Union[str, Dict], extra_in
             print(f' [DEBUG] 从 restoration_log 提取到退化类型: {predicted_log} (兼容旧格式)')
     
     # Compute format score with content-aware checking for non-clean samples
+    # Check if using progressive (gradual) format reward (for early training)
+    use_progressive_format = os.environ.get('USE_PROGRESSIVE_FORMAT', 'False').lower() == 'true'
+    
     if strict_format:
-        if use_enhanced_format:
+        if use_progressive_format:
+            # Use progressive (gradual) format checking - for models that are just starting to learn format
+            degradation_count = len(degradation_addition_order)
+            
+            # Get conversation_mode from extra_info
+            conversation_mode_from_info = 'multi_tool_planning'  # default
+            if extra_info is not None and isinstance(extra_info, dict):
+                conversation_mode_from_info = extra_info.get('conversation_mode', 'multi_tool_planning')
+            
+            format_score = check_multiturn_format_progressive(
+                solution_str,
+                degradation_count=degradation_count,
+                is_clean_sample=is_clean_sample,
+                max_tools_per_turn=max_tools_per_turn,
+                enable_total_tools_upper_limit=enable_total_tools_upper_limit,
+                conversation_mode=conversation_mode_from_info
+            )
+            print(f' [FORMAT REWARD] 使用阶梯式格式奖励 (progressive), score={format_score:.2f}')
+        elif use_enhanced_format:
             # Use enhanced multi-turn format checking with additional constraints
             degradation_count = len(degradation_addition_order)
+            
+            # Get conversation_mode from extra_info (for single_tool_iterative mode validation)
+            conversation_mode_from_info = 'multi_tool_planning'  # default
+            if extra_info is not None and isinstance(extra_info, dict):
+                conversation_mode_from_info = extra_info.get('conversation_mode', 'multi_tool_planning')
+            
             format_score = check_multiturn_format_v3_enhanced(
                 solution_str, 
                 degradation_count=degradation_count, 
                 is_clean_sample=is_clean_sample,
                 max_tools_per_turn=max_tools_per_turn,
-                enable_total_tools_upper_limit=enable_total_tools_upper_limit
+                enable_total_tools_upper_limit=enable_total_tools_upper_limit,
+                conversation_mode=conversation_mode_from_info
             )
+            print(f' [FORMAT REWARD] 使用增强格式奖励 (enhanced), score={format_score:.2f}')
         else:
             # Use standard multi-turn format checking for strict mode (已经内置了clean/non-clean判断)
             format_score = check_multiturn_format_v2(solution_str, is_clean_sample=is_clean_sample)
+            print(f' [FORMAT REWARD] 使用标准格式奖励 (standard), score={format_score:.2f}')
     else:
         format_score = check_response_format_v2(solution_str)
+        print(f' [FORMAT REWARD] 使用渐进格式奖励 (gradual), score={format_score:.2f}')
         
         # For non-clean samples, no additional requirements beyond format checking
         # (格式检查已经包含了tool_call和answer不能同时出现的规则)

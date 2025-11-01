@@ -14,7 +14,7 @@ set -xmain_ppo
 PROJECT_NAME="IRagentv2"
 # EXPERIMENT_NAME="debug_for_TIR_IR_air_refrew_bs128_n8_classreward_balanced_mi300"
 # EXPERIMENT_NAME="debug_for_TIR_IR_air_refrew_bs32_n8_balanced_lr1e-7_mi300"
-EXPERIMENT_NAME="debug_for_AIR_singledeg_plan_ref_bs32_n4_sp17_lr1e-6_mi300"
+EXPERIMENT_NAME="debug_for_AIR_singledeg_plan_ref_bs32_n4_spf_180_lr1e-6_mi300"
 # export CUDA_VISIBLE_DEVICES=4,5,6,7
 export SAVE_CHECKPOINT_DIR=/app/model/verl_checkpoints
 # export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
@@ -22,22 +22,22 @@ export WORLD_SIZE=1
 export NCCL_DEBUG=INFO
 export ROCM_USE_GPU_COPY=1
 
-export WANDB_API_KEY=ce0821ccdf886f2dbb5703772a0c41aa85611afb
+export WANDB_API_KEY=855cb8049820b795a82369db3dbdb2bda9030d67
 
 # ========== Tool Service IP Configuration ==========
 # 【单IP模式】- 传统配置方式
-# export TOOL_SERVICE_IP=10.21.9.6
+export TOOL_SERVICE_IP=10.21.9.6
 
 # 【多IP负载均衡模式】- 推荐用于加速处理
 # 配置多个工具服务器IP，系统将自动进行负载均衡
 # 支持逗号或分号分隔，例如：
-export TOOL_SERVICE_IPS="10.21.9.6,10.21.9.7"
+# export TOOL_SERVICE_IPS="10.21.9.6,10.21.9.7"
 # export TOOL_SERVICE_IPS="192.168.1.100;192.168.1.101;192.168.1.102"
 
 # 【负载均衡策略】
 # - round_robin: 轮询模式（默认），依次分配请求到各个服务器
 # - random: 随机模式，随机选择服务器
-export TOOL_LOAD_BALANCE_STRATEGY=round_robin
+# export TOOL_LOAD_BALANCE_STRATEGY=round_robin
 
 # 【注意事项】
 # 1. TOOL_SERVICE_IPS 优先级高于 TOOL_SERVICE_IP
@@ -113,8 +113,42 @@ export FORMAT_REWARD_WEIGHT=0.3             # 格式奖励权重（默认0.3）
 export QUALITY_REWARD_WEIGHT=0.7            # 图像质量奖励权重（默认0.7）
 export ENABLE_DEGRADATION_TYPE_REWARD=False # 是否启用退化类型奖励（默认False）
 export DEGRADATION_TYPE_REWARD_WEIGHT=1.0   # 退化类型奖励权重（默认1.0）
-export USE_ENHANCED_FORMAT=True            # 是否使用增强格式检查v3（默认False）
-export USE_SINGLE_TURN_FORMAT=True          # 是否使用单轮格式检查（默认False，单轮对话设为True）
+
+# ========== Format Reward Mode Configuration ==========
+# 格式奖励模式选择（三选一）
+export USE_PROGRESSIVE_FORMAT=False         # 【推荐：训练初期】阶梯式格式奖励（0.0→0.2→0.4→0.6→0.8→1.0）
+export USE_ENHANCED_FORMAT=True             # 【推荐：训练稳定后】增强格式检查（严格二元：1.0或-1.0）
+export USE_SINGLE_TURN_FORMAT=False         # 单轮格式检查（仅用于max_turns=1的场景）
+
+# 格式奖励模式说明：
+# 1. USE_PROGRESSIVE_FORMAT=True （阶梯式，适合刚开始训练的模型）
+#    - 适用场景：模型经过SFT，但还不太会遵循格式指令，经常不输出工具调用
+#    - 奖励机制：逐步引导，不会直接给负分
+#      * Level 0 (0.0): 完全无格式
+#      * Level 1 (0.2): 至少有<think>块
+#      * Level 2 (0.4): 有<think> + <tool_call>或<answer>
+#      * Level 3 (0.6): JSON格式正确
+#      * Level 4 (0.8): 工具名称合法
+#      * Level 5 (1.0): 完全符合规范
+#    - 优点：温和引导，模型容易学习，不会因为格式问题崩溃
+#    - 缺点：对格式要求不够严格，可能需要更长时间收敛
+#
+# 2. USE_ENHANCED_FORMAT=True （增强检查，适合已经学会基础格式的模型）
+#    - 适用场景：模型已经能稳定输出基本格式，需要进一步规范
+#    - 奖励机制：严格二元
+#      * 1.0: 完全符合所有格式规范
+#      * -1.0: 任何格式违规（强惩罚）
+#    - 优点：快速收敛到正确格式，训练效率高
+#    - 缺点：对初期模型太严格，可能导致负反馈过多
+#
+# 3. USE_SINGLE_TURN_FORMAT=True （单轮检查，仅用于特定场景）
+#    - 适用场景：max_turns=1 且 conversation_mode='multi_tool_planning'
+#    - 一般不推荐使用（除非是单轮完成所有工具调用的场景）
+#
+# 【训练策略建议】
+# 阶段1（前1-2个epoch）：USE_PROGRESSIVE_FORMAT=True  （学习基础格式）
+# 阶段2（后续epoch）：USE_ENHANCED_FORMAT=True        （强化格式规范）
+
 export MAX_TOOLS_PER_TURN=1                 # 单轮最大工具数（0=无限制，单工具迭代模式建议1）
 export ENABLE_TOTAL_TOOLS_UPPER_LIMIT=True  # 是否启用总工具数上限检查（默认False，单工具迭代模式建议True）
 export ENABLE_INTERMEDIATE_REWARD=True      # 是否启用中间图像质量奖励（默认False）
@@ -253,7 +287,7 @@ export MIOPEN_DEBUG_DISABLE_FIND_DB=1
 export MIOPEN_USER_DB_PATH=/tmp/miopen-cache
 export MIOPEN_CUSTOM_CACHE_DIR=/tmp/miopen-cache
 export PYTORCH_ROCM_ARCH=gfx90a
-BASEDIR=/app/xiaominl/air_v17
+BASEDIR=/app/xiaominl/air_full_3
 # BASEDIR=/app/xiaominl/datasets/air_sp12_up3_samole1_rand
 
 # VISUAL_DATASET_TRAIN_0_6_2=${BASEDIR}/shard-000000.parquet
@@ -281,6 +315,7 @@ VISUAL_DATASET_TEST_0=${BASEDIR}/shard-test-000000.parquet
 # VISUAL_DATASET_TRAIN_5=${BASEDIR}/shard-000005.parquet
 # VISUAL_DATASET_TRAIN_6=${BASEDIR}/shard-000006.parquet
 REF_MODEL_PATH=/app/xiaominl/models/Qwen2.5-VL-7B-Instruct
+REF_MODEL_PATH=/app/xiaominl/mymodel
 # RAY_ADDRESS='http://172.18.148.35:8265' ray job submit --address="http://172.18.148.35:8265" \
 #     --runtime-env /app/xiaominl/DeepEyes/verl/trainer/runtime_env.yaml \
 #     --no-wait \

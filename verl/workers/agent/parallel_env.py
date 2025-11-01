@@ -680,13 +680,20 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
             
             # 收集工具调用信息（用于统计工具-退化匹配率）
             if parsed_action.get('tool_calls'):
+                tool_calls = parsed_action['tool_calls']
+                
+                # 【修复】单工具迭代模式下，统计前先截断（与execute_tool_call中的逻辑一致）
+                if conversation_mode == 'single_tool_iterative' and len(tool_calls) > 1:
+                    print(f"[TOOL STATS WARNING] 样本{idx} 轮次{step + 1}: 单工具模式下检测到{len(tool_calls)}个工具，截断为1个")
+                    tool_calls = [tool_calls[0]]
+                
                 tool_names = []
-                for tool_call in parsed_action['tool_calls']:
+                for tool_call in tool_calls:
                     if isinstance(tool_call, dict) and 'name' in tool_call:
                         tool_names.append(tool_call['name'])
                 if tool_names:
                     tool_calls_per_sample[idx][step + 1] = tool_names
-                    print(f"[TOOL STATS] 样本{idx} 轮次{step + 1}: 调用工具 {tool_names}")
+                    print(f"[TOOL STATS] 样本{idx} 轮次{step + 1}: 调用工具 {tool_names} (统计数量: {len(tool_names)})")
             
             # 保存对话历史（用于wandb可视化）
             if hasattr(env, 'conversation_history') and idx < len(env.conversation_history):
@@ -842,6 +849,11 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
             # - single_tool_iterative: accumulate tool calls across turns
             if parsed_action.get('tool_calls'):
                 tool_calls = parsed_action['tool_calls']
+                
+                # 【修复】单工具迭代模式下，统计前先截断（与execute_tool_call和上面的统计逻辑一致）
+                if conversation_mode == 'single_tool_iterative' and len(tool_calls) > 1:
+                    tool_calls = [tool_calls[0]]
+                
                 num_tools = len(tool_calls)
                 
                 if conversation_mode == 'multi_tool_planning':
@@ -849,7 +861,7 @@ def agent_rollout_loop(config, vllm_engine, vllm_inputs, prompts, multi_modal_in
                     tool_call_cnt_list[idx] = num_tools
                     print(f"[DEBUG TOOL CNT] 样本{idx} 轮次{step + 1}: 工具调用计数 = {num_tools} (多工具模式，覆盖)")
                 else:
-                    # 单工具模式：累加每轮的工具调用次数
+                    # 单工具模式：累加每轮的工具调用次数（已截断为1个）
                     tool_call_cnt_list[idx] += num_tools
                     print(f"[DEBUG TOOL CNT] 样本{idx} 轮次{step + 1}: 工具调用计数 = {tool_call_cnt_list[idx]} (单工具模式，累加)")
             elif parsed_action.get('is_done', False):
@@ -1245,7 +1257,13 @@ def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None, convers
     # non-agent data or no tools to execute
     if action_string == '':
         return {}, 0.0, True, {}
-    elif not tools:
+    
+    # Handle <answer> case - episode is done (CHECK THIS FIRST!)
+    if parsed_output.get('is_done', False):
+        return {}, 0.0, True, {"status": "success", "type": "answer"}  # Episode done, no reward here
+    
+    # Then check if tools is empty
+    if not tools:
         # If tools is empty but action_string is not, it means parsing failed
         error_msg = "Failed to parse valid tool calls from the action string. Please check the format of your <tool_call> blocks."
         error_text = f"\n<|im_start|>user\nError: {error_msg}<|im_end|>\n<|im_start|>assistant\n"
@@ -1257,10 +1275,6 @@ def execute_tool_call(sample, tokenizer=None, processor=None, pbar=None, convers
             "prompt_token_ids_model": torch.tensor(obs_token_ids),
         }
         return error_obs, 0.0, False, {"error": error_msg, "status": "failed"}
-
-    # Handle <answer> case - episode is done
-    if parsed_output.get('is_done', False):
-        return {}, 0.0, True, {"status": "success", "type": "answer"}  # Episode done, no reward here
 
     # Execute tools sequentially
     final_tool_result = None
